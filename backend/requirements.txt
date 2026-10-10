@@ -1,0 +1,6 @@
+# Milestone 1: face matching
+insightface==0.7.3      # open-source face detection + ArcFace embeddings (runs locally)
+onnxruntime             # runs the InsightFace model on the CPU
+opencv-python           # reads and decodes images
+numpy                   # math on embeddings
+python-dotenv           # reads settings from .env

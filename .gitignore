@@ -1,0 +1,28 @@
+# Secrets and settings - never commit
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Your private test photos and generated results (names + scores)
+backend/test_photos/*
+!backend/test_photos/README.md
+backend/results/
+
+# Local databases
+*.db
+*.sqlite3
+
+# Flutter / Android build output
+app/build/
+app/.dart_tool/
+app/.flutter-plugins*
+*.apk
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
