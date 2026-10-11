@@ -32,8 +32,8 @@ early-intermediate: write simple, commented code and explain as you go.
 Dark only. Accent #5B8CFF, Bricolage Grotesque titles, Geist body, Geist Mono for data.
 Logo: two lowercase "a" bowls mirrored around one shared accent bar, plus the wordmark "aaina"
 with the "i" in the accent color. No Hindi text. Subtle animated dot-field background.
-User login: form left, playful mirror character on the right (eyes follow the cursor and close
-on the password field). Admin login is a separate page (ID + password + one-time code) with a
+User login (Android app): form plus playful mirror character (eyes follow the text being typed and close
+on the password field). Web is admin-only. Admin login is a separate page (ID + password + one-time code) with a
 live overview panel. Reference: `docs/design/aaina-design-preview.html` (open in a browser).
 
 ## Profile card rules

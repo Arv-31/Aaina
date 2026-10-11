@@ -9,8 +9,9 @@ source of truth. These are the changes and choices made since. Useful for judge 
 | Face detection on phone | Google ML Kit | Free, on-device, official Flutter plugin, gives tracking IDs and head angles |
 | Database | SQLite by default, Supabase switchable in `.env` | Works fully offline at the expo; cloud option kept |
 | Liveness | Head-turn at enrollment (ML Kit head angles) | Stops enrolling a printed photo; reuses the left/right shots |
-| Platforms | Android app + Web app (no iOS) | iOS builds need a Mac. Web covers laptops and desktops |
-| Logins | Separate user login and admin login | Admin console is for organisers only |
+| Platforms | Android app = everything for users (signup, face enrollment, profile, privacy, scanning others). Web = admin-only console. One Flutter codebase, no iOS | Decided 2026-10-11. Phone camera + ML Kit gives the smooth live demo. Phone browsers block the camera on plain-HTTP LAN pages, so users stay in the app. iOS builds need a Mac. Keep a demo phone at the stall for visitors without Android |
+| Logins | User login in the Android app. Admin login (ID + password + one-time code) only on the web console | Admin console is for organisers only |
+| Admin web console | Live overview, user management (hide/remove, delete requests), event mode + wipe, accuracy page (threshold chart), big-screen kiosk mode (laptop webcam shows enrolled visitors' cards) | Admin-exclusive features; kiosk works because a laptop browser may use its own camera on localhost |
 | Profile data | Smart form + optional LinkedIn PDF import | LinkedIn pages cannot be fetched for free or legally |
 | Profile AI | Rule-based PDF reader first, then a local Ollama model (Qwen2.5 1.5B) fills gaps in the background | Rule #2 updated: no cloud AI; a local, offline model may read profile text. Face recognition stays InsightFace |
 | Empty fields | Hidden on the card, never "not found". Minimum card = name + LinkedIn | Cleaner card |
@@ -26,7 +27,7 @@ source of truth. These are the changes and choices made since. Useful for judge 
 | C. Enrollment quality check | M2 (backend checks) and M7 (hints in the app) |
 | D. Save contact (vCard) | M6 (expanded card) |
 | E. Event mode + auto-delete | M3 (event tag, delete-after date, wipe script) |
-| F. Live dashboard | After the core flow (becomes the admin console) |
+| F. Live dashboard | After the core flow (becomes the admin web console; kiosk mode last) |
 | G. Accuracy test + table | After the core flow |
 | H. Threshold chart | After the core flow, uses `backend/results/pair_scores.csv` |
 | I. Mirror mode (front camera shows your own card) | M6 |
