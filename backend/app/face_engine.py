@@ -34,6 +34,11 @@ MATCH_THRESHOLD = float(os.getenv("MATCH_THRESHOLD", "0.38"))
 # Faces smaller than this many pixels wide are too blurry to trust.
 MIN_FACE_SIZE = int(os.getenv("MIN_FACE_SIZE", "60"))
 
+# The size the face detector shrinks each photo to before searching it.
+# 320 = faster, and it still finds faces in the tight crops the phone sends (at 640 a tight
+# crop was missed). Use 640 only if faces far from the camera are being missed.
+DET_SIZE = int(os.getenv("DET_SIZE", "320"))
+
 _model = None  # loaded once, then reused (loading takes a few seconds)
 
 
@@ -52,8 +57,8 @@ def get_model():
             providers=["CPUExecutionProvider"],
             allowed_modules=["detection", "recognition"],
         )
-        # ctx_id=-1 means CPU. det_size is the size the detector looks at; 640 is the default.
-        _model.prepare(ctx_id=-1, det_size=(640, 640))
+        # ctx_id=-1 means CPU.
+        _model.prepare(ctx_id=-1, det_size=(DET_SIZE, DET_SIZE))
         print("[face_engine] Model ready.")
     return _model
 
@@ -66,6 +71,28 @@ def read_image(path):
     if img is None:
         raise ValueError(f"Could not read image: {path}")
     return img
+
+
+def decode_image(data):
+    """Turn uploaded photo bytes (JPEG/PNG) into an image in memory. Returns None if unreadable."""
+    return cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+
+
+def get_all_faces(img):
+    """
+    Find every face in an image (used by /recognize and enrollment checks).
+    Returns a list of dicts: embedding, box [x1, y1, x2, y2], width, detector_score.
+    """
+    faces = []
+    for f in get_model().get(img):
+        x1, y1, x2, y2 = [int(v) for v in f.bbox]
+        faces.append({
+            "embedding": normalize(f.embedding),
+            "box": [x1, y1, x2, y2],
+            "width": x2 - x1,
+            "detector_score": round(float(f.det_score), 3),
+        })
+    return faces
 
 
 def normalize(vec):

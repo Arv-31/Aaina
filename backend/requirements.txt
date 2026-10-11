@@ -4,3 +4,11 @@ onnxruntime             # runs the InsightFace model on the CPU
 opencv-python           # reads and decodes images
 numpy                   # math on embeddings
 python-dotenv           # reads settings from .env
+
+# Milestone 2: backend server
+fastapi==0.143.0        # the web API framework (gives the /docs test page for free)
+uvicorn[standard]==0.54.0   # the server that runs FastAPI
+python-multipart==0.0.32    # lets FastAPI receive uploaded photos
+pyotp==2.10.0           # admin one-time codes (works with Google Authenticator)
+qrcode==8.2             # prints the admin setup QR code in the terminal
+httpx==0.28.1           # used by the automatic test script (tools/test_backend.py)

@@ -48,8 +48,13 @@ LinkedIn "Save to PDF" file, or pasted text.
   `backend/tools/compare_faces.py`, `backend/tools/threshold_test.py`.
   Model = buffalo_s, only detection + recognition loaded (~0.13 s per face on the i3 laptop;
   buffalo_l was 1.36 s). Threshold = 0.38 (details in `docs/DECISIONS.md`).
-- Milestone 2 next: FastAPI backend with /enroll, /recognize, user accounts and separate admin
-  login, plus extras A, B, C (see DECISIONS.md).
+- Milestone 2 (FastAPI backend): code done and tested 2026-10-11 (`tools/test_backend.py`,
+  42/42 checks). Files in `backend/app/`: config, db (SQLite), security, matcher, quality,
+  models, main; `backend/run.py`; `tools/setup_admin.py`. Extras A (QR), B (per-field
+  sharing), C (enrollment quality check) are in the backend. Waiting for the developer to try
+  it in /docs and say "next".
+- Milestone 3 next: persistence is already SQLite; add the Supabase switch, event tag +
+  delete-after date + wipe (extra E).
 
 ## Setting up a new machine (Windows)
 1. Python 3.11 (python.org, tick "Add to PATH"). Newer versions may lack InsightFace support.

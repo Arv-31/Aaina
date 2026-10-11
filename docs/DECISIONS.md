@@ -18,6 +18,10 @@ source of truth. These are the changes and choices made since. Useful for judge 
 | Empty fields | Hidden on the card, never "not found". Minimum card = name + LinkedIn | Cleaner card |
 | Design | Dark only, accent #5B8CFF, Bricolage Grotesque titles, Geist body, mirrored-"a" logo | Approved preview v2 |
 | Face model | InsightFace `buffalo_s`, only detection + recognition loaded. `buffalo_l` switchable in `.env` | Measured on the i3 laptop: 0.13 s per face vs 1.36 s for `buffalo_l`. Live recognition needs speed. Switching model means re-enrolling everyone |
+| Detector size | `DET_SIZE=320` (was 640) | At 640 a tight 256 px phone-style face crop was not detected at all; at 320 it is, and scans are faster (crop 0.26 s, full photo 0.41 s). Recognition accuracy unchanged: still 0 wrong matches in 136k LFW stranger pairs at 0.38 |
+| App-to-server security | No shared "API key" in the app. Every scan/edit needs a login token (`Authorization: Bearer`). DB stores only a SHA-256 hash of each token; passwords stored as salted PBKDF2 hashes | A key inside an APK can be extracted, so it isn't a secret (rule 4). Tokens are per person and can be revoked |
+| Admin one-time code | TOTP from a free authenticator app (Google/Microsoft Authenticator), set up with `tools/setup_admin.py` | Free, works offline at the expo. SMS/email codes cost money or need internet |
+| Unknown faces in the log | Admin overview counts scans. An "Unknown" scan stores only the time, nothing about the face | Keeps the promise "Unknown means nothing is stored" while the dashboard still shows activity |
 
 ## Where the extras go
 
