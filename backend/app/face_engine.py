@@ -22,12 +22,14 @@ from dotenv import load_dotenv
 
 load_dotenv()  # reads backend/.env if it exists (settings only, never secrets in code)
 
-# "buffalo_l" = most accurate. "buffalo_s" = smaller and faster on a slow CPU.
-MODEL_NAME = os.getenv("FACE_MODEL", "buffalo_l")
+# "buffalo_s" = small and fast (~0.13 s per face on an i3 laptop). Default.
+# "buffalo_l" = a bit more accurate but ~10x slower on CPU.
+# Embeddings from the two models do NOT match each other: switching means everyone re-enrolls.
+MODEL_NAME = os.getenv("FACE_MODEL", "buffalo_s")
 
 # Score at or above this = same person. Below = "Unknown".
-# Starts at 0.45 (synopsis section 5); tools/threshold_test.py helps you pick the real value.
-MATCH_THRESHOLD = float(os.getenv("MATCH_THRESHOLD", "0.45"))
+# 0.38 was picked with tools/threshold_test.py (see docs/DECISIONS.md). Override in .env.
+MATCH_THRESHOLD = float(os.getenv("MATCH_THRESHOLD", "0.38"))
 
 # Faces smaller than this many pixels wide are too blurry to trust.
 MIN_FACE_SIZE = int(os.getenv("MIN_FACE_SIZE", "60"))
@@ -42,8 +44,14 @@ def get_model():
         # Imported here so other files can import face_engine without paying the load cost.
         from insightface.app import FaceAnalysis
 
-        print(f"[face_engine] Loading InsightFace model '{MODEL_NAME}' (first run downloads ~300 MB)...")
-        _model = FaceAnalysis(name=MODEL_NAME, providers=["CPUExecutionProvider"])
+        print(f"[face_engine] Loading InsightFace model '{MODEL_NAME}' (first run downloads it once: ~120 MB small, ~280 MB large)...")
+        # The model pack also has landmark and age/gender models we don't need.
+        # Loading only detection + recognition makes it several times faster.
+        _model = FaceAnalysis(
+            name=MODEL_NAME,
+            providers=["CPUExecutionProvider"],
+            allowed_modules=["detection", "recognition"],
+        )
         # ctx_id=-1 means CPU. det_size is the size the detector looks at; 640 is the default.
         _model.prepare(ctx_id=-1, det_size=(640, 640))
         print("[face_engine] Model ready.")

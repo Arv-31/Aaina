@@ -15,6 +15,7 @@ source of truth. These are the changes and choices made since. Useful for judge 
 | Profile AI | Rule-based PDF reader first, then a local Ollama model (Qwen2.5 1.5B) fills gaps in the background | Rule #2 updated: no cloud AI; a local, offline model may read profile text. Face recognition stays InsightFace |
 | Empty fields | Hidden on the card, never "not found". Minimum card = name + LinkedIn | Cleaner card |
 | Design | Dark only, accent #5B8CFF, Bricolage Grotesque titles, Geist body, mirrored-"a" logo | Approved preview v2 |
+| Face model | InsightFace `buffalo_s`, only detection + recognition loaded. `buffalo_l` switchable in `.env` | Measured on the i3 laptop: 0.13 s per face vs 1.36 s for `buffalo_l`. Live recognition needs speed. Switching model means re-enrolling everyone |
 
 ## Where the extras go
 
@@ -32,5 +33,15 @@ source of truth. These are the changes and choices made since. Useful for judge 
 
 ## Threshold
 
-Chosen value: _fill in after running `tools/threshold_test.py`_
-How it was chosen: _paste the recommendation line here_
+Chosen value: **0.38** (model `buffalo_s`, tested 2026-10-11)
+
+How it was chosen: `tools/threshold_test.py` on 11 photos of 2 people (31 same-person pairs,
+24 different-people pairs).
+- Different people: highest 0.122, average 0.048
+- Same person: lowest 0.409, average 0.601
+- The script recommended 0.27 (middle of the clean gap). We picked 0.38 instead: it still
+  gets all 31 same-person pairs right, and leaves more margin against strangers, because at
+  the expo there will be many more people than in the test. Rule: "Unknown" is better than a
+  wrong name.
+- Re-run with more people before the expo if possible; raw scores are in
+  `backend/results/pair_scores.csv` (gitignored, used later for the threshold chart).

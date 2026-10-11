@@ -44,11 +44,10 @@ LinkedIn pages cannot be fetched or scraped; data comes only from the form, an u
 LinkedIn "Save to PDF" file, or pasted text.
 
 ## Status (update this as milestones finish)
-- Milestone 1 (face matching script): code written in `backend/app/face_engine.py`,
+- Milestone 1 (face matching script): DONE 2026-10-11. `backend/app/face_engine.py`,
   `backend/tools/compare_faces.py`, `backend/tools/threshold_test.py`.
-  NOT yet tested: InsightFace install was interrupted on the first laptop (low RAM).
-  Next step: install InsightFace, run the self-test, have the developer run threshold_test.py
-  on their photos, record the chosen threshold in `docs/DECISIONS.md`.
+  Model = buffalo_s, only detection + recognition loaded (~0.13 s per face on the i3 laptop;
+  buffalo_l was 1.36 s). Threshold = 0.38 (details in `docs/DECISIONS.md`).
 - Milestone 2 next: FastAPI backend with /enroll, /recognize, user accounts and separate admin
   login, plus extras A, B, C (see DECISIONS.md).
 
