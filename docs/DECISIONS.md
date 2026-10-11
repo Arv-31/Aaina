@@ -43,5 +43,12 @@ How it was chosen: `tools/threshold_test.py` on 11 photos of 2 people (31 same-p
   gets all 31 same-person pairs right, and leaves more margin against strangers, because at
   the expo there will be many more people than in the test. Rule: "Unknown" is better than a
   wrong name.
+- Checked against strangers: 200 people (511 photos) from LFW, a free public research face
+  dataset, plus the developer's photos. Results at 0.38:
+  - 135,527 different-people pairs: **0 wrong matches** (closest strangers scored 0.314)
+  - The developer's photos vs all 200 strangers: highest 0.215
+  - 454 same-person pairs: 2.6% fall below 0.38 and show "Unknown". Fine in the app, because
+    each person enrolls several shots and the camera checks many frames.
+  - At 0.27 (the first suggestion) there were 20 wrong matches, so the higher value was right.
 - Re-run with more people before the expo if possible; raw scores are in
   `backend/results/pair_scores.csv` (gitignored, used later for the threshold chart).
