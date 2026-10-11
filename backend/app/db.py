@@ -8,6 +8,8 @@ Tables:
   sessions         login tokens (only a hash of each token is stored)
   recognitions     time + matched user id for the admin overview.
                    "Unknown" faces store only the time: nothing about the person.
+  events           event mode (extra E): event name + auto-delete date
+  app_state        small key/value settings, e.g. which event is running now
 
 Deleting a user deletes their embeddings, consents and sessions too (ON DELETE CASCADE).
 Milestone 3 can add Supabase behind these same functions; the rest of the app won't change.
@@ -49,6 +51,7 @@ CREATE TABLE IF NOT EXISTS users (
     visible        INTEGER NOT NULL DEFAULT 1,   -- 0 = "hide me" (shows as Unknown)
     share          TEXT NOT NULL DEFAULT '{}',   -- JSON {field: false} for hidden fields
     qr_token       TEXT UNIQUE NOT NULL,         -- QR fallback (extra A)
+    event          TEXT,                         -- event they signed up at (NULL = none)
     created_at     INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS face_embeddings (
@@ -76,6 +79,15 @@ CREATE TABLE IF NOT EXISTS recognitions (
     at      INTEGER NOT NULL,
     user_id TEXT REFERENCES users(id) ON DELETE CASCADE   -- NULL = Unknown
 );
+CREATE TABLE IF NOT EXISTS events (
+    name         TEXT PRIMARY KEY,
+    delete_after INTEGER,           -- unix time; users of this event are wiped after it
+    created_at   INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS app_state (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
 """
 
 
@@ -95,6 +107,10 @@ def connect():
 def init_db():
     with connect() as conn:
         conn.executescript(SCHEMA)
+        # Upgrade databases made before event mode existed: add the missing column.
+        columns = [row["name"] for row in conn.execute("PRAGMA table_info(users)")]
+        if "event" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN event TEXT")
 
 
 def _user_dict(row):
@@ -110,15 +126,15 @@ def _user_dict(row):
 
 # ---------- users ----------
 
-def create_user(username, password_hash, profile, consent_version):
+def create_user(username, password_hash, profile, consent_version, event=None):
     user_id = str(uuid.uuid4())
     with connect() as conn:
         conn.execute(
-            f"INSERT INTO users (id, username, password_hash, {', '.join(PROFILE_FIELDS)}, qr_token, created_at) "
-            f"VALUES (?, ?, ?, {', '.join('?' for _ in PROFILE_FIELDS)}, ?, ?)",
+            f"INSERT INTO users (id, username, password_hash, {', '.join(PROFILE_FIELDS)}, qr_token, event, created_at) "
+            f"VALUES (?, ?, ?, {', '.join('?' for _ in PROFILE_FIELDS)}, ?, ?, ?)",
             [user_id, username, password_hash]
             + [_encode(f, profile.get(f)) for f in PROFILE_FIELDS]
-            + [uuid.uuid4().hex, now()],
+            + [uuid.uuid4().hex, event, now()],
         )
         conn.execute(
             "INSERT INTO consents (id, user_id, consent_version, accepted_at) VALUES (?, ?, ?, ?)",
@@ -272,3 +288,61 @@ def overview():
             "unknown_today": one("SELECT COUNT(*) FROM recognitions WHERE user_id IS NULL AND at >= ?", start_of_day),
             "recent_matches": [{"name": r["name"], "at": r["at"]} for r in recent],
         }
+
+
+# ---------- event mode (extra E) ----------
+
+def get_current_event():
+    """The event new sign-ups are tagged with, as a dict, or None."""
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT e.* FROM app_state s JOIN events e ON e.name = s.value WHERE s.key = 'current_event'"
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def start_event(name, delete_after):
+    """Create the event (or update its delete date) and make it the current one."""
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO events (name, delete_after, created_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(name) DO UPDATE SET delete_after = excluded.delete_after",
+            (name, delete_after, now()),
+        )
+        conn.execute(
+            "INSERT INTO app_state (key, value) VALUES ('current_event', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (name,),
+        )
+
+
+def stop_event():
+    """No current event: new sign-ups get no event tag (and are never auto-deleted)."""
+    with connect() as conn:
+        conn.execute("DELETE FROM app_state WHERE key = 'current_event'")
+
+
+def list_events():
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT e.*, (SELECT COUNT(*) FROM users u WHERE u.event = e.name) AS users "
+            "FROM events e ORDER BY e.created_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def wipe_event(name):
+    """Delete every user who signed up at this event, and the event itself. Returns how many users."""
+    with connect() as conn:
+        count = conn.execute("DELETE FROM users WHERE event = ?", (name,)).rowcount
+        conn.execute("DELETE FROM events WHERE name = ?", (name,))
+        conn.execute("DELETE FROM app_state WHERE key = 'current_event' AND value = ?", (name,))
+        return count
+
+
+def wipe_expired_events():
+    """Auto-delete: wipe every event whose delete-after time has passed. Returns {event: users}."""
+    with connect() as conn:
+        names = [r["name"] for r in conn.execute(
+            "SELECT name FROM events WHERE delete_after IS NOT NULL AND delete_after <= ?", (now(),))]
+    return {name: wipe_event(name) for name in names}

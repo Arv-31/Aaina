@@ -1,5 +1,5 @@
 """
-test_backend.py - automatic end-to-end test of the Milestone 2 API.
+test_backend.py - automatic end-to-end test of the backend API (Milestones 2 and 3).
 
 Run from the backend folder (the server does NOT need to be running):
     .venv\\Scripts\\python tools\\test_backend.py
@@ -15,6 +15,7 @@ import sqlite3
 import sys
 import tempfile
 import time
+from datetime import datetime, timedelta
 
 # Use a throwaway database and a test admin login BEFORE the app reads its settings.
 TMP_DIR = tempfile.mkdtemp(prefix="aaina_test_")
@@ -38,7 +39,8 @@ import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.main import app  # noqa: E402
+from app import matcher  # noqa: E402
+from app.main import app, run_auto_delete  # noqa: E402
 
 PHOTOS = os.path.join(os.path.dirname(__file__), "..", "test_photos")
 results = []
@@ -189,6 +191,51 @@ def main():
         check("no rows about the deleted user remain in any table", left == 0, left)
         stored = [f for f in os.listdir(TMP_DIR) if not f.startswith("test.db")]
         check("no photo files were saved anywhere", stored == [], stored)
+
+    # Milestone 3: "restart" the server. The in-memory face list is emptied, so anything that
+    # still works afterwards must have come back from the database file.
+    matcher._user_ids, matcher._matrix = [], np.zeros((0, 512), np.float32)
+    with TestClient(app) as client:
+        print("\nAfter a server restart")
+        check("login from before the restart still works", client.get("/me", headers=auth(token_c)).status_code == 200)
+        face = scan(client, token_c, b_photos[0])
+        check(f"{b_name} is still recognized (faces reloaded from the database)",
+              face["status"] == "match" and face["card"]["name"] == "Bob Test", face)
+
+        print("\nEvent mode (extra E)")
+        r = client.post("/admin/login", json={"admin_id": "testadmin", "password": "test-admin-password",
+                                              "otp": pyotp.TOTP(TEST_SECRET).now()})
+        admin = auth(r.json()["token"])
+        check("no event running yet", client.get("/event").json() is None)
+        r = client.put("/admin/event", json={"name": "Old Expo", "delete_after_date": "2020-01-01"}, headers=admin)
+        check("a delete date in the past is refused", r.status_code == 400)
+        tomorrow = (datetime.now().date() + timedelta(days=1)).isoformat()
+        r = client.put("/admin/event", json={"name": "Test Expo", "delete_after_date": tomorrow}, headers=admin)
+        check("admin can start an event with a delete date", r.status_code == 200 and r.json()["delete_after_date"] == tomorrow, r.text)
+        check("the app can read the event and its delete date", client.get("/event").json()["name"] == "Test Expo")
+        client.post("/auth/signup", json={**bob, "username": "dave", "name": "Dave Expo", "borrowed": False})
+        users = {u["name"]: u for u in client.get("/admin/users", headers=admin).json()}
+        check("new sign-ups are tagged with the event", users["Dave Expo"]["event"] == "Test Expo" and users["Bob Test"]["event"] is None, users)
+        r = client.delete("/admin/events/Test Expo", params={"confirm": "wrong"}, headers=admin)
+        check("wipe needs the event name typed again", r.status_code == 400)
+
+        # Pretend the delete date has passed, then run the hourly auto-delete check.
+        conn = sqlite3.connect(os.environ["DB_PATH"])
+        conn.execute("UPDATE events SET delete_after = ? WHERE name = 'Test Expo'", (int(time.time()) - 1,))
+        conn.commit()
+        conn.close()
+        wiped = run_auto_delete()
+        names = [u["name"] for u in client.get("/admin/users", headers=admin).json()]
+        check("auto-delete removes the event's users after the date", wiped == {"Test Expo": 1} and "Dave Expo" not in names, wiped)
+        check("users without an event are kept", "Bob Test" in names, names)
+        check("the expired event is no longer current", client.get("/event").json() is None)
+
+        client.put("/admin/event", json={"name": "Second Expo"}, headers=admin)
+        client.post("/auth/signup", json={**bob, "username": "erin", "name": "Erin Expo", "borrowed": False})
+        r = client.delete("/admin/events/Second Expo", params={"confirm": "Second Expo"}, headers=admin)
+        check("one-click wipe deletes everyone from an event", r.json().get("users_deleted") == 1, r.text)
+        events = client.get("/admin/events", headers=admin).json()
+        check("wiped events disappear from the list", events == [], events)
 
     shutil.rmtree(TMP_DIR, ignore_errors=True)
     passed = sum(results)

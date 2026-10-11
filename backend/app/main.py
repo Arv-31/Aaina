@@ -9,8 +9,10 @@ Who can call what:
 The app sends its login token in the header:  Authorization: Bearer <token>
 """
 
+import asyncio
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,19 +20,41 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app import db, face_engine, matcher, quality, security
 from app.config import settings
-from app.models import (CONSENT_VERSION, AdminLoginIn, AdminUserUpdate, LoginIn,
+from app.models import (CONSENT_VERSION, AdminLoginIn, AdminUserUpdate, EventIn, LoginIn,
                         ProfileUpdate, SignupIn, build_card)
+
+
+def run_auto_delete():
+    """Event mode (extra E): wipe events whose delete-after date has passed."""
+    wiped = db.wipe_expired_events()
+    if wiped:
+        matcher.reload()
+        for name, count in wiped.items():
+            print(f"[aaina] Auto-delete: event '{name}' passed its date, removed {count} user(s).")
+    return wiped
+
+
+async def auto_delete_loop():
+    """Check once an hour while the server runs (also catches up right after a restart)."""
+    while True:
+        await asyncio.sleep(3600)
+        run_auto_delete()
 
 
 @asynccontextmanager
 async def lifespan(app):
     """Runs once when the server starts: set up the database and load the face model."""
     db.init_db()
+    run_auto_delete()        # an event may have expired while the server was off
     matcher.reload()
     face_engine.get_model()  # load now so the first scan isn't slow
+    event = db.get_current_event()
     print(f"[aaina] Ready. {matcher.count()} face embeddings loaded. "
+          f"Event: {event['name'] if event else 'none'}. "
           f"Admin login {'ON' if security.admin_configured() else 'OFF (run tools/setup_admin.py)'}.")
+    task = asyncio.create_task(auto_delete_loop())
     yield
+    task.cancel()
 
 
 app = FastAPI(title="Aaina API", version="0.2", description="See who you're meeting.", lifespan=lifespan)
@@ -91,12 +115,27 @@ def _my_profile(user):
     return profile
 
 
+def _event_info(event):
+    """Event dict for the app, e.g. the consent screen shows the auto-delete date."""
+    if event is None:
+        return None
+    when = event["delete_after"]
+    return {"name": event["name"], "delete_after": when,
+            "delete_after_date": (datetime.fromtimestamp(when) - timedelta(days=1)).date().isoformat() if when else None}
+
+
 # ---------- public ----------
 
 @app.get("/health", tags=["public"])
 def health():
     return {"ok": True, "model": face_engine.MODEL_NAME, "threshold": face_engine.MATCH_THRESHOLD,
             "faces_loaded": matcher.count()}
+
+
+@app.get("/event", tags=["public"])
+def current_event():
+    """The event running now (or null). The consent screen shows when data is auto-deleted."""
+    return _event_info(db.get_current_event())
 
 
 @app.post("/auth/signup", tags=["account"])
@@ -107,7 +146,9 @@ def signup(body: SignupIn):
     if db.get_user_by_username(body.username):
         raise HTTPException(409, "That username is already taken.")
     profile = body.model_dump(exclude={"username", "password", "consent", "borrowed"})
-    user_id = db.create_user(body.username, security.hash_password(body.password), profile, CONSENT_VERSION)
+    event = db.get_current_event()
+    user_id = db.create_user(body.username, security.hash_password(body.password), profile, CONSENT_VERSION,
+                             event["name"] if event else None)
     token = security.new_user_session(user_id, body.borrowed)
     return {"user_id": user_id, "token": token, "borrowed": body.borrowed,
             "next": "Send 3 to 5 face photos to POST /enroll"}
@@ -264,13 +305,15 @@ def admin_logout(creds: HTTPAuthorizationCredentials = Depends(bearer)):
 
 @app.get("/admin/overview", tags=["admin"])
 def admin_overview(_=Depends(current_admin)):
-    return {**db.overview(), "faces_loaded": matcher.count(), "threshold": face_engine.MATCH_THRESHOLD}
+    return {**db.overview(), "faces_loaded": matcher.count(), "threshold": face_engine.MATCH_THRESHOLD,
+            "event": _event_info(db.get_current_event())}
 
 
 @app.get("/admin/users", tags=["admin"])
 def admin_users(q: str = Query("", description="search name or username"), _=Depends(current_admin)):
     return [{"user_id": u["id"], "username": u["username"], "name": u["name"], "visible": u["visible"],
-             "face_count": u["face_count"], "created_at": u["created_at"]} for u in db.list_users(q)]
+             "face_count": u["face_count"], "event": u["event"], "created_at": u["created_at"]}
+            for u in db.list_users(q)]
 
 
 @app.patch("/admin/users/{user_id}", tags=["admin"])
@@ -290,3 +333,46 @@ def admin_delete_user(user_id: str, _=Depends(current_admin)):
         raise HTTPException(404, "No such user.")
     matcher.reload()
     return {"deleted": True}
+
+
+# ---------- admin: event mode (extra E) ----------
+
+@app.get("/admin/events", tags=["admin"])
+def admin_events(_=Depends(current_admin)):
+    current = db.get_current_event()
+    return [{**_event_info(e), "users": e["users"], "current": bool(current and current["name"] == e["name"])}
+            for e in db.list_events()]
+
+
+@app.put("/admin/event", tags=["admin"])
+def admin_start_event(body: EventIn, _=Depends(current_admin)):
+    """Start an event (or change its delete date). New sign-ups get tagged with it."""
+    delete_after = None
+    if body.delete_after_date:
+        if body.delete_after_date < datetime.now().date():
+            raise HTTPException(400, "The delete date can't be in the past.")
+        # Delete at the END of that day (midnight, laptop's local time).
+        midnight = datetime.combine(body.delete_after_date + timedelta(days=1), datetime.min.time())
+        delete_after = int(midnight.timestamp())
+    db.start_event(body.name, delete_after)
+    return _event_info(db.get_current_event())
+
+
+@app.post("/admin/event/stop", tags=["admin"])
+def admin_stop_event(_=Depends(current_admin)):
+    """Stop tagging new sign-ups. Existing event users keep their delete date."""
+    db.stop_event()
+    return {"current_event": None}
+
+
+@app.delete("/admin/events/{name}", tags=["admin"])
+def admin_wipe_event(name: str, confirm: str = Query(..., description="Type the event name again"),
+                     _=Depends(current_admin)):
+    """One-click wipe: delete everyone who signed up at this event. Cannot be undone."""
+    if confirm != name:
+        raise HTTPException(400, "Type the exact event name in 'confirm' to wipe it.")
+    if not any(e["name"] == name for e in db.list_events()):
+        raise HTTPException(404, "No such event.")
+    count = db.wipe_event(name)
+    matcher.reload()
+    return {"event": name, "users_deleted": count}

@@ -5,6 +5,7 @@ Pydantic checks every request automatically: wrong or missing fields get a clear
 before our code runs. Empty text ("") is turned into "not filled in" (None).
 """
 
+from datetime import date
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -150,6 +151,18 @@ class AdminLoginIn(BaseModel):
 
 class AdminUserUpdate(BaseModel):
     visible: bool
+
+
+class EventIn(BaseModel):
+    """Start (or change) the current event. New sign-ups are tagged with it."""
+    name: str = Field(min_length=2, max_length=60, description="e.g. KLE Tech Expo 2026")
+    delete_after_date: Optional[date] = Field(
+        None, description="YYYY-MM-DD. Everyone from this event is deleted after this day. Empty = keep")
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, v):
+        return v.strip()
 
 
 def build_card(user):
