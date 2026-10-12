@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aaina Camera Screen</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Preview of the improved Milestone 4 camera screen. Same tokens as aaina-design-preview.html. */
+:root {
+  --bg: #07080B; --s1: #0E1015; --s2: #151821;
+  --line: rgba(255,255,255,.07); --line2: rgba(255,255,255,.12);
+  --fg: #ECEDF1; --mute: #8A8E99; --dim: #5A5E69;
+  --acc: #5B8CFF; --acc-ink: #050814; --ok: #3DDC97; --warn: #FFB547; --bad: #FF6B6B;
+  --f-display: "Bricolage Grotesque", sans-serif; --f-body: "Geist", system-ui, sans-serif; --f-mono: "Geist Mono", monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--f-body); -webkit-font-smoothing: antialiased; padding: 32px 16px 48px }
+h1 { font: 700 28px/1.1 var(--f-display); letter-spacing: -0.03em; margin: 0 0 6px; text-align: center }
+.lead { color: var(--mute); text-align: center; margin: 0 auto 32px; max-width: 60ch }
+.devices { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center }
+.cap { text-align: center; margin-top: 14px; max-width: 280px }
+.cap b { display: block; font-family: var(--f-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--acc); margin-bottom: 4px }
+.cap span { color: var(--mute); font-size: 12.5px }
+.phone { width: 280px; aspect-ratio: 280 / 590; border-radius: 42px; padding: 9px; background: #000; box-shadow: 0 0 0 1px #24262E, 0 40px 80px -30px rgba(0,0,0,.9) }
+.scr { position: relative; width: 100%; height: 100%; border-radius: 34px; overflow: hidden; background: var(--bg) }
+
+/* camera picture (drawn placeholder) */
+.cam { position: absolute; inset: 0; background: radial-gradient(110% 70% at 40% 25%, #4f5563 0%, #23262e 48%, #121418 100%) }
+.per { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%) }
+.per svg { display: block }
+/* NEW 1: dark fade top and bottom so pills and buttons always read */
+.fade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.6), transparent 20%, transparent 70%, rgba(0,0,0,.75)) }
+
+/* top bar */
+.top { position: absolute; z-index: 4; top: 40px; left: 14px; right: 14px; display: flex; align-items: center; gap: 8px }
+.logo { display: inline-flex; align-items: center; gap: 6px; margin-right: auto }
+.logo svg { height: 15px }
+.logo .w { font: 700 16px/1 var(--f-display); letter-spacing: -0.035em }
+.logo .w i { font-style: normal; color: var(--acc) }
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 99px; font: 500 11px var(--f-body); background: rgba(8,9,12,.55); border: 1px solid var(--line2); backdrop-filter: blur(10px); white-space: nowrap }
+.pill.mono { font-family: var(--f-mono); color: var(--mute) }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok) }
+.dot.warn { background: var(--warn); box-shadow: 0 0 8px var(--warn) }
+.dot.live { animation: blink 1.6s ease-in-out infinite }
+@keyframes blink { 50% { opacity: .35 } }
+
+/* NEW 2: scan line while no face is found */
+.scan { position: absolute; z-index: 2; left: 12%; right: 12%; height: 2px; background: linear-gradient(90deg, transparent, var(--acc), transparent); opacity: .8; animation: scan 3.6s ease-in-out infinite }
+@keyframes scan { 0%,100% { top: 22% } 50% { top: 70% } }
+.hint { position: absolute; z-index: 4; left: 50%; bottom: 96px; transform: translateX(-50%); text-align: center; width: 80% }
+.hint .pill { height: auto; padding: 8px 14px; font-size: 12px; white-space: normal; line-height: 1.35 }
+
+/* NEW 3: face box with soft glow + "Face found" tag (becomes the profile card in M6) */
+.fbox { position: absolute; z-index: 3; filter: drop-shadow(0 0 6px rgba(91,140,255,.55)); animation: breathe 2.4s ease-in-out infinite }
+.fbox::before, .fbox::after, .fbox b::before, .fbox b::after { content: ""; position: absolute; width: 18px; height: 18px; border: 0 solid var(--acc) }
+.fbox::before { top: 0; left: 0; border-top-width: 2.5px; border-left-width: 2.5px; border-top-left-radius: 9px }
+.fbox::after { top: 0; right: 0; border-top-width: 2.5px; border-right-width: 2.5px; border-top-right-radius: 9px }
+.fbox b::before { bottom: 0; left: 0; border-bottom-width: 2.5px; border-left-width: 2.5px; border-bottom-left-radius: 9px }
+.fbox b::after { bottom: 0; right: 0; border-bottom-width: 2.5px; border-right-width: 2.5px; border-bottom-right-radius: 9px }
+@keyframes breathe { 50% { transform: scale(1.03) } }
+.tag { position: absolute; z-index: 4; transform: translateX(-50%) }
+.tag .pill { color: var(--fg) }
+
+/* NEW 4: dock with QR / Scanning / Me (QR and Me open their screens in M6 and M7) */
+.dock { position: absolute; z-index: 4; left: 14px; right: 14px; bottom: 22px; display: flex; gap: 10px; align-items: center }
+.main { flex: 1; height: 50px; border-radius: 99px; background: var(--acc); color: var(--acc-ink); font: 600 13.5px var(--f-body); display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 10px 30px -10px rgba(91,140,255,.7) }
+.main .ring { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--acc-ink); animation: blink 1.6s ease-in-out infinite }
+.ic { width: 50px; height: 50px; border-radius: 50%; background: rgba(8,9,12,.55); border: 1px solid rgba(255,255,255,.14); backdrop-filter: blur(10px); display: grid; place-items: center; font: 600 11px var(--f-body); color: var(--fg) }
+.ic svg { width: 20px; height: 20px }
+.flip { position: absolute; z-index: 4; right: 14px; top: 76px; width: 38px; height: 38px }
+.flip svg { width: 17px; height: 17px }
+
+/* NEW 5: friendly problem screens with a clear next step */
+.state { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 28px; text-align: center;
+  background: radial-gradient(70% 45% at 50% 40%, rgba(91,140,255,.16), transparent 70%), var(--bg) }
+.state .icon { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; background: var(--s2); border: 1px solid var(--line2) }
+.state .icon svg { width: 28px; height: 28px }
+.state h3 { margin: 4px 0 0; font: 700 21px/1.1 var(--f-display); letter-spacing: -0.03em }
+.state p { margin: 0; color: var(--mute); font-size: 13px; max-width: 30ch }
+.state ol { margin: 4px 0 0; padding: 12px 14px 12px 32px; text-align: left; font-size: 12.5px; color: var(--fg); background: var(--s1); border: 1px solid var(--line); border-radius: 14px; width: 100% }
+.state ol li + li { margin-top: 4px }
+.btn { margin-top: 8px; height: 46px; width: 100%; border: 0; border-radius: 12px; background: var(--acc); color: var(--acc-ink); font: 600 14px var(--f-body) }
+.banner { position: absolute; z-index: 4; left: 14px; right: 14px; top: 80px; display: flex; gap: 10px; align-items: flex-start; padding: 11px 12px; border-radius: 14px; background: rgba(30,22,8,.75); border: 1px solid rgba(255,181,71,.35); backdrop-filter: blur(12px); font-size: 12px }
+.banner b { display: block; color: var(--warn); font-weight: 600 }
+.banner span { color: var(--mute) }
+.banner code { font-family: var(--f-mono); color: var(--fg); font-size: 11px }
+@media (prefers-reduced-motion: reduce) { .scan, .fbox, .dot.live, .main .ring { animation: none } }
+</style>
+</head>
+<body>
+<h1>Camera screen, improved</h1>
+<p class="lead">Milestone 4 polish. The names and profile cards come in Milestone 6; this only changes how scanning looks and how problems are explained.</p>
+
+<template id="person"><svg width="190" height="380" viewBox="0 0 140 280"><ellipse cx="70" cy="110" rx="40" ry="50" fill="#a98370"/><path d="M30 102c0-36 19-58 42-58s40 20 40 52c-7-17-22-28-40-28S38 80 30 102Z" fill="#1f1815"/><path d="M0 280c4-64 32-106 70-106s66 42 70 106Z" fill="#2f3b52"/></svg></template>
+<template id="logo"><span class="logo"><svg viewBox="0 0 44 26" fill="none"><circle cx="11" cy="15" r="8" stroke="currentColor" stroke-width="3.4"/><circle cx="33" cy="15" r="8" stroke="currentColor" stroke-width="3.4"/><rect x="20" y="2" width="4" height="22" rx="2" fill="#5B8CFF"/></svg><span class="w">aa<i>i</i>na</span></span></template>
+<template id="dock"><div class="dock">
+  <span class="ic" title="Scan a QR code"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><path d="M14 14h2v2m4-2v6h-6v-2"/></svg></span>
+  <span class="main"><span class="ring"></span>Scanning</span>
+  <span class="ic" title="My card">Me</span>
+</div></template>
+
+<div class="devices">
+  <!-- 1. Searching -->
+  <div>
+    <div class="phone"><div class="scr">
+      <div class="cam"></div><div class="fade"></div>
+      <div class="top"><span data-logo></span><span class="pill"><i class="dot live"></i>Looking</span></div>
+      <span class="ic flip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h11l-3-3M20 16H9l3 3"/></svg></span>
+      <div class="scan"></div>
+      <div class="hint"><span class="pill">Point the camera at someone who joined Aaina</span></div>
+      <div data-dock></div>
+    </div></div>
+    <div class="cap"><b>1 · No face yet</b><span>A scan line sweeps and a hint says what to do. The speed number is gone from the main view.</span></div>
+  </div>
+
+  <!-- 2. Face found -->
+  <div>
+    <div class="phone"><div class="scr">
+      <div class="cam"><div class="per" data-person></div></div><div class="fade"></div>
+      <div class="top"><span data-logo></span><span class="pill"><i class="dot live"></i>1 face</span></div>
+      <span class="ic flip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h11l-3-3M20 16H9l3 3"/></svg></span>
+      <div class="tag" style="left:50%;top:196px"><span class="pill">Face found</span></div>
+      <div class="fbox" style="left:76px;top:232px;width:110px;height:136px"><b></b></div>
+      <div data-dock></div>
+    </div></div>
+    <div class="cap"><b>2 · Face found</b><span>Box glows in the accent colour and gently breathes. The tag above it turns into the profile card in Milestone 6.</span></div>
+  </div>
+
+  <!-- 3. Camera busy -->
+  <div>
+    <div class="phone"><div class="scr">
+      <div class="state">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#FFB547" stroke-width="1.8"><rect x="3" y="7" width="13" height="11" rx="2.5"/><path d="M16 11l5-3v9l-5-3M3 3l18 18"/></svg></div>
+        <h3>Camera is busy</h3>
+        <p>Another app or browser tab is using it.</p>
+        <ol><li>Close other tabs or apps using the camera</li><li>Tap Try again</li></ol>
+        <button class="btn">Try again</button>
+      </div>
+    </div></div>
+    <div class="cap"><b>3 · Camera problem</b><span>Plain words and one button instead of the raw browser error. Same style for "permission off" and "no camera".</span></div>
+  </div>
+
+  <!-- 4. Server offline -->
+  <div>
+    <div class="phone"><div class="scr">
+      <div class="cam"><div class="per" data-person></div></div><div class="fade"></div>
+      <div class="top"><span data-logo></span><span class="pill"><i class="dot warn"></i>Offline</span></div>
+      <div class="banner"><span>⚠</span><div><b>Can't reach the Aaina server</b><span>On the laptop run <code>python run.py</code> in backend. Retrying every second.</span></div></div>
+      <div data-dock></div>
+    </div></div>
+    <div class="cap"><b>4 · Server offline</b><span>A clear banner with the fix, instead of a tiny red pill.</span></div>
+  </div>
+</div>
+
+<script>
+// Fill the repeated pieces (logo, dock, person drawing) from the templates above.
+for (const [attr, id] of [["data-logo","logo"],["data-dock","dock"],["data-person","person"]])
+  document.querySelectorAll(`[${attr}]`).forEach(el => el.replaceWith(document.getElementById(id).content.cloneNode(true)));
+</script>
+</body></html>

@@ -95,6 +95,16 @@ def get_all_faces(img):
     return faces
 
 
+def detect_boxes(img):
+    """
+    Find faces only (no embeddings), so it is faster than get_all_faces.
+    Used by the laptop-webcam camera screen to draw boxes.
+    Returns a list of [x1, y1, x2, y2] boxes.
+    """
+    bboxes, _ = get_model().det_model.detect(img, max_num=0, metric="default")
+    return [[int(v) for v in b[:4]] for b in bboxes]
+
+
 def normalize(vec):
     """Scale a vector to length 1, so a plain dot product equals cosine similarity."""
     vec = np.asarray(vec, dtype=np.float32)

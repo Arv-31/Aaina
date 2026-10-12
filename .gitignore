@@ -1,5 +1,7 @@
 # Secrets and settings - never commit
 .env
+# Old copies kept by tools/usb.py load (may hold secrets / user data)
+*.before-usb-*
 
 # Python
 __pycache__/
@@ -27,3 +29,14 @@ app/.flutter-plugins*
 .idea/
 Thumbs.db
 .DS_Store
+
+# Design snapshots made by app/tool/design_shots_test.dart (regenerate any time)
+app/tool/shots/
+
+# App builds handed out by the server (tools/publish_app.py)
+backend/public/
+
+# Claude Code project notes (kept local, not on GitHub)
+CLAUDE.md
+.claude/
+app/android/.kotlin/

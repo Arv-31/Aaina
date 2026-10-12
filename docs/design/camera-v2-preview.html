@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aaina Camera v2</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Camera screen v2 preview (richer HUD). Base styles from the M5 preview. Tokens match the locked design (aaina-design-preview.html). */
+:root {
+  --bg: #07080B; --s1: #0E1015; --s2: #151821;
+  --line: rgba(255,255,255,.07); --line2: rgba(255,255,255,.12);
+  --fg: #ECEDF1; --mute: #8A8E99; --dim: #5A5E69;
+  --acc: #5B8CFF; --acc-ink: #050814; --ok: #3DDC97; --warn: #FFB547;
+  --li: #0A66C2;
+  --f-d: "Bricolage Grotesque", sans-serif; --f-b: "Geist", system-ui, sans-serif; --f-m: "Geist Mono", monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--f-b); -webkit-font-smoothing: antialiased; padding: 36px 16px 64px; overflow-x: hidden }
+#field { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none }
+.wrap { position: relative; z-index: 1; max-width: 1240px; margin: 0 auto }
+.eyebrow { font: 500 11px var(--f-m); letter-spacing: .14em; text-transform: uppercase; color: var(--acc); text-align: center }
+h1 { font: 800 clamp(28px, 4vw, 42px)/1.05 var(--f-d); letter-spacing: -0.035em; margin: 8px 0; text-align: center }
+h2 { font: 700 22px/1.1 var(--f-d); letter-spacing: -0.03em; margin: 56px 0 6px; text-align: center }
+.lead { color: var(--mute); text-align: center; margin: 0 auto 34px; max-width: 64ch }
+.devices { display: flex; flex-wrap: wrap; gap: 30px 26px; justify-content: center }
+.cap { text-align: center; margin-top: 14px; max-width: 270px; margin-inline: auto }
+.cap b { display: block; font: 500 11px var(--f-m); letter-spacing: .12em; text-transform: uppercase; color: var(--acc); margin-bottom: 4px }
+.cap span { color: var(--mute); font-size: 12.5px }
+
+/* ---------- device shells ---------- */
+.phone { width: 270px; aspect-ratio: 270 / 570; border-radius: 42px; padding: 9px; background: #000; box-shadow: 0 0 0 1px #24262E, 0 40px 80px -30px rgba(0,0,0,.9) }
+.scr { position: relative; width: 100%; height: 100%; border-radius: 34px; overflow: hidden; background: var(--bg) }
+.laptop { width: min(900px, 100%); }
+.lid { border-radius: 16px 16px 0 0; padding: 12px 12px 14px; background: #0b0c10; box-shadow: 0 0 0 1px #24262E }
+.lscr { position: relative; aspect-ratio: 16 / 9.4; border-radius: 6px; overflow: hidden; background: var(--bg); display: grid; grid-template-columns: 1fr 230px }
+.base { height: 14px; margin: 0 -4%; border-radius: 0 0 14px 14px; background: linear-gradient(180deg, #1a1c22, #0d0e12); box-shadow: 0 30px 60px -20px rgba(0,0,0,.9) }
+
+/* ---------- camera picture (drawn stand-in) ---------- */
+.cam { position: absolute; inset: 0; overflow: hidden; background:
+  radial-gradient(50% 35% at 82% 18%, #5d6474 0%, transparent 65%),
+  radial-gradient(120% 70% at 30% 30%, #464b57 0%, #20232a 55%, #0f1115 100%) }
+.per { position: absolute; bottom: 0 }
+.per svg { display: block }
+.fade { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0,0,0,.66), transparent 18%, transparent 64%, rgba(0,0,0,.85)) }
+.vign { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 80px rgba(0,0,0,.55) }
+/* faint HUD grid + lens corners: the view feels like an instrument, not a void */
+.grid { position: absolute; inset: 0; pointer-events: none; opacity: .5;
+  background-image: linear-gradient(rgba(140,165,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(140,165,255,.05) 1px, transparent 1px);
+  background-size: 28px 28px; mask-image: radial-gradient(80% 60% at 50% 50%, #000 30%, transparent 80%) }
+.lens { position: absolute; inset: 64px 12px 132px; pointer-events: none }
+.lens i { position: absolute; width: 14px; height: 14px; border: 0 solid rgba(255,255,255,.25) }
+.lens i:nth-child(1) { top: 0; left: 0; border-top-width: 1.5px; border-left-width: 1.5px }
+.lens i:nth-child(2) { top: 0; right: 0; border-top-width: 1.5px; border-right-width: 1.5px }
+.lens i:nth-child(3) { bottom: 0; left: 0; border-bottom-width: 1.5px; border-left-width: 1.5px }
+.lens i:nth-child(4) { bottom: 0; right: 0; border-bottom-width: 1.5px; border-right-width: 1.5px }
+.lens .rd { position: absolute; left: 0; bottom: -18px; font: 500 8.5px var(--f-m); letter-spacing: .12em; color: rgba(255,255,255,.35) }
+.lens .rd.r { left: auto; right: 0 }
+
+/* ---------- top bar ---------- */
+.top { position: absolute; z-index: 6; top: 38px; left: 12px; right: 12px; display: flex; align-items: center; gap: 6px }
+.logo { display: inline-flex; align-items: center; gap: 6px; margin-right: auto }
+.logo svg { height: 14px }
+.logo .w { font: 700 16px/1 var(--f-d); letter-spacing: -0.035em }
+.logo .w i { font-style: normal; color: var(--acc) }
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 25px; padding: 0 9px; border-radius: 99px; font: 500 10.5px var(--f-b); background: rgba(8,9,12,.55); border: 1px solid var(--line2); backdrop-filter: blur(10px); white-space: nowrap; color: var(--fg) }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: blink 1.6s ease-in-out infinite }
+.dot.d { background: var(--dim); box-shadow: none; animation: none }
+.bars { display: inline-flex; gap: 1.5px; align-items: flex-end; height: 9px }
+.bars i { width: 2px; background: var(--ok); border-radius: 1px } .bars i:nth-child(1) { height: 3px } .bars i:nth-child(2) { height: 6px } .bars i:nth-child(3) { height: 9px }
+@keyframes blink { 50% { opacity: .35 } }
+
+/* ---------- face reticle ---------- */
+.ret { position: absolute; z-index: 3; --c: rgba(255,255,255,.55) }
+.ret .c { position: absolute; width: 15px; height: 15px; border: 0 solid var(--c) }
+.ret .c:nth-child(1) { top: 0; left: 0; border-top-width: 2.5px; border-left-width: 2.5px; border-top-left-radius: 9px }
+.ret .c:nth-child(2) { top: 0; right: 0; border-top-width: 2.5px; border-right-width: 2.5px; border-top-right-radius: 9px }
+.ret .c:nth-child(3) { bottom: 0; left: 0; border-bottom-width: 2.5px; border-left-width: 2.5px; border-bottom-left-radius: 9px }
+.ret .c:nth-child(4) { bottom: 0; right: 0; border-bottom-width: 2.5px; border-right-width: 2.5px; border-bottom-right-radius: 9px }
+.ret .t { position: absolute; background: var(--c); opacity: .7 } /* mid-edge ticks */
+.ret .t.n { top: -6px; left: 50%; width: 1.5px; height: 6px } .ret .t.s { bottom: -6px; left: 50%; width: 1.5px; height: 6px }
+.ret .t.w { left: -6px; top: 50%; height: 1.5px; width: 6px } .ret .t.e { right: -6px; top: 50%; height: 1.5px; width: 6px }
+.ret.known { --c: var(--acc); filter: drop-shadow(0 0 8px rgba(91,140,255,.7)) }
+.ret.known::after { content: ""; position: absolute; inset: 0; border-radius: 12px; border: 1px solid rgba(91,140,255,.28); background: radial-gradient(70% 70% at 50% 45%, rgba(91,140,255,.10), transparent 70%) }
+.ret.lock { animation: lock .5s cubic-bezier(.2,1.3,.4,1) both }
+@keyframes lock { from { transform: scale(1.35); opacity: 0 } }
+.ret.unk { --c: rgba(255,255,255,.35) }
+/* checking: dashed ring that fills + scan dots on the face */
+.ring { position: absolute; z-index: 3; pointer-events: none; overflow: visible }
+.ring .bg { fill: none; stroke: rgba(255,255,255,.12); stroke-width: 2 }
+.ring .fg { fill: none; stroke: var(--acc); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 60 400; animation: fill 1.3s linear infinite; filter: drop-shadow(0 0 4px rgba(91,140,255,.8)) }
+@keyframes fill { to { stroke-dashoffset: -460 } }
+.mesh { position: absolute; z-index: 2; border-radius: 50%; pointer-events: none;
+  background-image: radial-gradient(rgba(140,175,255,.9) 1px, transparent 1.4px); background-size: 9px 9px;
+  mask-image: linear-gradient(180deg, transparent, #000 40%, #000 60%, transparent); mask-size: 100% 220%; animation: meshScan 1.3s linear infinite; opacity: .7 }
+@keyframes meshScan { from { mask-position: 0 120% } to { mask-position: 0 -120% } }
+
+/* ---------- labels ---------- */
+.lbl { position: absolute; z-index: 5; transform: translate(-50%, -100%); display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 99px; font: 500 10px var(--f-m); letter-spacing: .06em; text-transform: uppercase; background: rgba(10,12,17,.7); border: 1px solid var(--line2); backdrop-filter: blur(10px); white-space: nowrap; color: var(--mute) }
+.lbl.acc { color: var(--acc); border-color: rgba(91,140,255,.4) }
+
+/* ---------- AR card with leader line ---------- */
+.lead-ln { position: absolute; z-index: 4; overflow: visible; pointer-events: none }
+.lead-ln path { fill: none; stroke: rgba(91,140,255,.75); stroke-width: 1.2; stroke-dasharray: 3 3 }
+.lead-ln circle { fill: var(--acc); filter: drop-shadow(0 0 4px var(--acc)) }
+.arc { position: absolute; z-index: 5; width: 148px; padding: 10px 10px 9px; border-radius: 15px;
+  background: linear-gradient(160deg, rgba(22,26,38,.82), rgba(10,12,17,.78)); backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid transparent; background-clip: padding-box; box-shadow: 0 16px 34px -10px rgba(0,0,0,.8);
+  animation: cardIn .45s .1s cubic-bezier(.2,1.2,.4,1) both }
+.arc::before { content: ""; position: absolute; inset: -1px; border-radius: 16px; padding: 1px; pointer-events: none;
+  background: linear-gradient(140deg, rgba(91,140,255,.9), rgba(91,140,255,.1) 45%, rgba(255,255,255,.18));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude }
+@keyframes cardIn { from { opacity: 0; transform: translateX(-10px) scale(.92) } }
+.arc .hd { display: flex; align-items: center; gap: 8px }
+.av { width: 30px; height: 30px; border-radius: 9px; flex: none; display: grid; place-items: center; font: 700 12px var(--f-d); color: var(--acc-ink); background: linear-gradient(140deg, #7fa5ff, #3b5fc0) }
+.arc h4 { margin: 0; font: 700 14px/1.1 var(--f-d); letter-spacing: -0.02em }
+.arc .op { display: inline-flex; align-items: center; gap: 4px; font: 500 9px var(--f-b); color: var(--ok); margin-top: 2px }
+.arc .st { margin: 8px 0 0; font-size: 11px; line-height: 1.35; color: var(--fg) }
+.arc .st small { display: block; color: var(--mute); font-size: 10.5px }
+.li { margin-top: 8px; display: flex; align-items: center; gap: 7px; padding: 6px 7px; border-radius: 9px; background: rgba(10,102,194,.16); border: 1px solid rgba(10,102,194,.35); font-size: 10.5px; color: var(--fg) }
+.li b { width: 17px; height: 17px; border-radius: 4px; background: var(--li); color: #fff; display: grid; place-items: center; font: 700 9px var(--f-b); flex: none }
+.li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.li i { margin-left: auto; font-style: normal; color: var(--mute) }
+
+/* ---------- bottom: in-view strip + dock ---------- */
+.strip { position: absolute; z-index: 6; left: 12px; right: 12px; bottom: 80px; display: flex; gap: 7px; align-items: center }
+.strip .k { white-space: nowrap; font: 500 8.5px var(--f-m); letter-spacing: .12em; color: var(--mute); text-transform: uppercase; margin-right: 2px }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 3px; border-radius: 99px; background: rgba(10,12,17,.66); border: 1px solid var(--line2); backdrop-filter: blur(10px); font-size: 10.5px; white-space: nowrap }
+.chip .av { width: 24px; height: 24px; border-radius: 50%; font-size: 9.5px }
+.chip.on { border-color: rgba(91,140,255,.55); box-shadow: 0 0 0 3px rgba(91,140,255,.10) }
+.chip.u .av { background: #2A2E3A; color: var(--mute) }
+.dock { position: absolute; z-index: 6; left: 12px; right: 12px; bottom: 20px; display: flex; gap: 9px; align-items: center }
+.main { flex: 1; height: 48px; border-radius: 99px; background: var(--acc); color: var(--acc-ink); font: 600 13px var(--f-b); display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 10px 30px -10px rgba(91,140,255,.75) }
+.main.off { background: rgba(8,9,12,.6); color: var(--fg); border: 1px solid rgba(91,140,255,.55); box-shadow: none }
+.main .rg { width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; animation: blink 1.6s ease-in-out infinite }
+.ic { width: 48px; height: 48px; border-radius: 50%; background: rgba(8,9,12,.55); border: 1px solid rgba(255,255,255,.14); backdrop-filter: blur(10px); display: grid; place-items: center; color: var(--fg); flex: none }
+.ic svg { width: 19px; height: 19px }
+
+/* ---------- connect sheet ---------- */
+.dimmer { position: absolute; inset: 0; z-index: 7; background: rgba(4,5,8,.55); backdrop-filter: blur(4px) }
+.sheet { position: absolute; z-index: 8; left: 0; right: 0; bottom: 0; padding: 10px 18px 20px; border-radius: 26px 26px 0 0; background: linear-gradient(180deg, #131722, #0b0d12); border-top: 1px solid var(--line2); box-shadow: 0 -20px 50px rgba(0,0,0,.6) }
+.grab { width: 36px; height: 4px; border-radius: 4px; background: var(--line2); margin: 0 auto 14px }
+.sheet h3 { margin: 0; font: 700 20px/1.1 var(--f-d); letter-spacing: -0.03em }
+.sheet p { margin: 4px 0 10px; color: var(--mute); font-size: 11.5px }
+.steps { display: flex; gap: 6px; margin-bottom: 4px }
+.steps span { flex: 1; height: 3px; border-radius: 3px; background: var(--line2) } .steps span.on { background: var(--acc) }
+.fl { display: block; font-size: 10.5px; color: var(--mute); margin: 9px 0 4px; font-weight: 500 }
+.in { height: 38px; border-radius: 10px; border: 1px solid var(--line2); background: var(--s2); display: flex; align-items: center; padding: 0 11px; font-size: 12.5px; gap: 8px }
+.in.mono { font-family: var(--f-m); font-size: 11.5px }
+.in.focus { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(91,140,255,.18) }
+.in .ok { margin-left: auto; white-space: nowrap; color: var(--ok); font: 500 10px var(--f-m); display: inline-flex; gap: 5px; align-items: center }
+.in .ok::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 6px var(--ok) }
+.btn { margin-top: 14px; height: 42px; border-radius: 11px; background: var(--acc); color: var(--acc-ink); font: 600 13.5px var(--f-b); display: grid; place-items: center }
+.fine { margin-top: 10px; color: var(--dim); font-size: 10.5px; text-align: center }
+
+/* ---------- laptop sidebar ---------- */
+.btn { margin-top: 14px; height: 42px; border-radius: 11px; background: var(--acc); color: var(--acc-ink); font: 600 13.5px var(--f-b); display: grid; place-items: center }
+.fine { margin-top: 10px; color: var(--dim); font-size: 10.5px; text-align: center }
+
+/* laptop sidebar (from M5) */
+/* ---------- laptop sidebar ---------- */
+.lcam { position: relative; overflow: hidden }
+.side { background: linear-gradient(180deg, #0d0f15, #090a0e); border-left: 1px solid var(--line); padding: 14px 13px; display: flex; flex-direction: column; gap: 10px; min-width: 0 }
+.side h5 { margin: 0; font: 500 9.5px var(--f-m); letter-spacing: .14em; color: var(--mute); text-transform: uppercase; display: flex; justify-content: space-between }
+.row { display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 12px; background: var(--s1); border: 1px solid var(--line) }
+.row.on { border-color: rgba(91,140,255,.45); background: linear-gradient(140deg, rgba(91,140,255,.12), var(--s1) 60%) }
+.row b { display: block; font: 700 12.5px/1.15 var(--f-d); letter-spacing: -0.01em }
+.row small { display: block; color: var(--mute); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.row > div { min-width: 0 }
+.row .av { width: 30px; height: 30px; border-radius: 50% }
+.row.u .av { background: #2A2E3A; color: var(--mute) }
+.join { margin-top: auto; padding: 13px; border-radius: 14px; border: 1px solid rgba(91,140,255,.4); background: radial-gradient(90% 80% at 0% 0%, rgba(91,140,255,.22), transparent 70%), var(--s1) }
+.join b { display: block; font: 700 15px/1.15 var(--f-d); letter-spacing: -0.02em }
+.join span { display: block; color: var(--mute); font-size: 10.5px; margin: 3px 0 10px }
+.join .btn { margin: 0; height: 36px; font-size: 12.5px }
+.kbd { font: 500 9.5px var(--f-m); color: var(--dim); text-align: center; margin-top: 7px }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important } }
+@media (max-width: 760px) { .lscr { grid-template-columns: 1fr } .side { display: none } }
+/* ================= v2 additions ================= */
+.top2 { position: absolute; z-index: 6; top: 36px; left: 10px; right: 10px; display: flex; align-items: center; gap: 6px }
+.mk { display: inline-flex; align-items: center; gap: 6px; margin-right: auto }
+.mk .m { position: relative; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center;
+  background: radial-gradient(120% 120% at 0% 0%, rgba(91,140,255,.45), rgba(91,140,255,.05) 60%), #0d1018; border: 1px solid rgba(91,140,255,.45); box-shadow: 0 0 18px -4px rgba(91,140,255,.8) }
+.mk .m svg { width: 20px }
+.mk .m::after { content: ""; position: absolute; inset: 0; border-radius: 10px; background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,.35) 50%, transparent 65%); background-size: 250% 100%; animation: shine 3.2s ease-in-out infinite }
+@keyframes shine { 0%, 60% { background-position: 130% 0 } 100% { background-position: -30% 0 } }
+.mk .w { font: 800 17px/1 var(--f-d); letter-spacing: -0.04em }
+.mk .w i { font-style: normal; color: var(--acc) }
+.mk small { display: block; font: 500 7.5px var(--f-m); letter-spacing: .14em; color: var(--mute); margin-top: 2px }
+.evt { white-space: nowrap; font: 500 8.5px var(--f-m); letter-spacing: .1em; padding: 4px 7px; border-radius: 6px; color: #FFD58A; background: rgba(255,181,71,.12); border: 1px solid rgba(255,181,71,.35) }
+.ava { width: 30px; height: 30px; border-radius: 50%; padding: 2px; background: conic-gradient(var(--acc), transparent 30%, #BFD0FF 55%, transparent 80%, var(--acc)); animation: spin 5s linear infinite }
+.ava span { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; font: 700 10px var(--f-d); color: var(--acc-ink); background: linear-gradient(140deg, #7fa5ff, #3b5fc0); box-shadow: 0 0 0 2px var(--bg); animation: spin 5s linear infinite reverse }
+@keyframes spin { to { transform: rotate(360deg) } }
+/* stats strip + tools row under the top bar */
+.hudrow { position: absolute; z-index: 6; top: 74px; left: 10px; right: 10px; display: flex; align-items: center; gap: 5px }
+.hudrow .stat { width: auto; display: flex; align-items: baseline; gap: 4px; padding: 4px 7px; border-radius: 9px }
+.hudrow .stat b { font-size: 12px } .hudrow .stat small { margin: 0 }
+.hudrow .tool { width: 28px; height: 28px; font-size: 9px } .hudrow .tool svg { width: 13px; height: 13px }
+.hudrow .sp { margin-left: auto }
+/* side rails */
+.rail { position: absolute; z-index: 6; display: flex; flex-direction: column; gap: 6px }
+.stat { width: 46px; padding: 6px 0 5px; border-radius: 12px; text-align: center; background: rgba(8,9,12,.6); border: 1px solid var(--line2); backdrop-filter: blur(10px) }
+.stat b { display: block; font: 700 15px/1 var(--f-d) }
+.stat small { display: block; font: 500 6.5px var(--f-m); letter-spacing: .12em; color: var(--mute); margin-top: 3px }
+.stat.k b { color: var(--acc) } .stat.u b { color: var(--mute) } .stat.m b { color: var(--ok) }
+.tool { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font: 600 10px var(--f-m); background: rgba(8,9,12,.6); border: 1px solid var(--line2); backdrop-filter: blur(10px); color: var(--fg) }
+.tool.on { color: var(--acc-ink); background: var(--acc); border-color: var(--acc) }
+.tool svg { width: 15px; height: 15px }
+/* distance tag under faces */
+.dist { position: absolute; z-index: 5; transform: translateX(-50%); font: 500 8px var(--f-m); letter-spacing: .1em; color: var(--acc); padding: 2px 6px; border-radius: 5px; background: rgba(8,9,12,.7); border: 1px solid rgba(91,140,255,.35); white-space: nowrap }
+.dist.u { color: var(--mute); border-color: var(--line2) }
+.lbl small { color: var(--dim); text-transform: none; letter-spacing: 0; font-family: var(--f-b) }
+/* in-view carousel */
+.car { position: absolute; z-index: 6; left: 10px; right: 0; bottom: 112px; display: flex; gap: 7px; overflow: hidden }
+.mini { flex: none; display: flex; align-items: center; gap: 7px; padding: 5px 10px 5px 5px; border-radius: 14px; background: rgba(10,12,17,.72); border: 1px solid var(--line2); backdrop-filter: blur(12px) }
+.mini.on { border-color: rgba(91,140,255,.55); background: linear-gradient(140deg, rgba(91,140,255,.18), rgba(10,12,17,.72) 60%) }
+.mini .av { width: 26px; height: 26px; border-radius: 8px; font-size: 10px }
+.mini b { display: block; font: 700 11px/1.1 var(--f-d) }
+.mini small { display: block; font-size: 9px; color: var(--mute); white-space: nowrap }
+.mini.u .av { background: #2A2E3A; color: var(--mute) }
+/* mode tabs */
+.modes { position: absolute; z-index: 6; left: 0; right: 0; bottom: 84px; display: flex; justify-content: center; gap: 18px; font: 600 9.5px var(--f-m); letter-spacing: .14em; color: var(--mute) }
+.modes span.on { color: var(--fg); position: relative } .modes span.on::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 6px var(--acc) }
+/* dock v2 */
+.dock2 { position: absolute; z-index: 6; left: 14px; right: 14px; bottom: 14px; display: flex; align-items: center; justify-content: space-between }
+.side-btn { position: relative; width: 44px; height: 44px; border-radius: 15px; display: grid; place-items: center; background: rgba(8,9,12,.6); border: 1px solid var(--line2); backdrop-filter: blur(10px); color: var(--fg) }
+.side-btn svg { width: 19px; height: 19px }
+.badge { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; border-radius: 9px; padding: 0 4px; display: grid; place-items: center; font: 700 9px var(--f-b); color: var(--acc-ink); background: var(--ok); box-shadow: 0 0 0 2px var(--bg) }
+.shutter { position: relative; width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center }
+.shutter::before { content: ""; position: absolute; inset: 0; border-radius: 50%; padding: 3px; background: conic-gradient(var(--acc) 0 70%, rgba(91,140,255,.15) 70%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: spin 2.4s linear infinite }
+.shutter i { width: 48px; height: 48px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #8fb0ff, var(--acc) 55%, #3b5fc0); box-shadow: 0 0 26px -2px rgba(91,140,255,.9); display: grid; place-items: center }
+.shutter i svg { width: 20px; color: var(--acc-ink) }
+.sl { position: absolute; bottom: -13px; left: 50%; transform: translateX(-50%); font: 500 7px var(--f-m); letter-spacing: .14em; color: var(--mute); white-space: nowrap }
+/* sheets v2 */
+.sh { position: absolute; z-index: 8; left: 0; right: 0; bottom: 0; padding: 10px 14px 16px; border-radius: 24px 24px 0 0; background: radial-gradient(120% 40% at 0% 0%, rgba(91,140,255,.14), transparent 60%), linear-gradient(180deg, #131722, #0b0d12); border-top: 1px solid rgba(91,140,255,.35) }
+.sh h3 { margin: 0; font: 800 19px/1.1 var(--f-d); letter-spacing: -0.03em; display: flex; align-items: baseline; gap: 8px }
+.sh h3 small { font: 500 9px var(--f-m); letter-spacing: .12em; color: var(--mute) }
+.sh p.s { margin: 3px 0 10px; font-size: 10.5px; color: var(--mute) }
+.row2 { display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 13px; background: var(--s1); border: 1px solid var(--line); margin-bottom: 6px }
+.row2 .av { width: 32px; height: 32px; border-radius: 10px; font-size: 11px }
+.row2 b { display: block; font: 700 12px/1.15 var(--f-d) }
+.row2 small { display: block; font-size: 9.5px; color: var(--mute) }
+.row2 .t { margin-left: auto; text-align: right; font: 500 8.5px var(--f-m); color: var(--dim); white-space: nowrap }
+.row2 .t em { display: block; font-style: normal; color: var(--acc) }
+.sw { width: 34px; height: 20px; border-radius: 10px; background: var(--ok); position: relative; flex: none; margin-left: auto }
+.sw::after { content: ""; position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px }
+.tile { padding: 9px; border-radius: 12px; background: var(--s1); border: 1px solid var(--line2); font-size: 10.5px; display: flex; gap: 7px; align-items: center }
+.tile svg { width: 16px; height: 16px; color: var(--acc); flex: none }
+.mecard { position: relative; overflow: hidden; padding: 12px; border-radius: 16px; border: 1px solid rgba(91,140,255,.4);
+  background: radial-gradient(80% 120% at 100% 0%, rgba(123,91,255,.35), transparent 60%), radial-gradient(90% 120% at 0% 0%, rgba(91,140,255,.4), transparent 60%), #0c1020 }
+.mecard .hd { display: flex; gap: 10px; align-items: center }
+.mecard .av { width: 42px; height: 42px; border-radius: 50%; font-size: 15px; box-shadow: 0 0 0 2px #0c1020, 0 0 0 3.5px var(--acc) }
+.mecard h4 { margin: 0; font: 800 17px/1 var(--f-d); letter-spacing: -0.03em }
+.mecard .v { font: 500 8.5px var(--f-m); letter-spacing: .1em; color: var(--ok); margin-top: 4px }
+.mecard .wm { position: absolute; right: -14px; bottom: -18px; width: 110px; opacity: .08 }
+/* starting screen */
+.start { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(70% 45% at 50% 40%, rgba(91,140,255,.22), transparent 70%), var(--bg) }
+.start .ring { position: relative; width: 120px; height: 120px; display: grid; place-items: center }
+.start .ring::before, .start .ring::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid rgba(91,140,255,.5); animation: pulse 2s ease-out infinite }
+.start .ring::after { animation-delay: 1s }
+@keyframes pulse { from { transform: scale(.6); opacity: 1 } to { transform: scale(1.4); opacity: 0 } }
+.start .ring .m { width: 64px; height: 64px; border-radius: 20px }
+.start .ring .m svg { width: 40px }
+.start h5 { margin: 18px 0 4px; text-align: center; font: 800 26px/1 var(--f-d); letter-spacing: -0.04em }
+.start h5 i { font-style: normal; color: var(--acc) }
+.start p { margin: 0; text-align: center; color: var(--mute); font-size: 11.5px }
+.start .bar { margin: 18px auto 6px; width: 110px; height: 2px; border-radius: 2px; background: var(--line2); overflow: hidden }
+.start .bar::after { content: ""; display: block; width: 40%; height: 100%; background: var(--acc); box-shadow: 0 0 8px var(--acc); animation: load 1.2s ease-in-out infinite }
+@keyframes load { from { transform: translateX(-100%) } to { transform: translateX(260%) } }
+.start .k { text-align: center; font: 500 8px var(--f-m); letter-spacing: .16em; color: var(--dim) }
+.start .chips { display: flex; gap: 6px; justify-content: center; margin-top: 26px }
+.start .chips span { font: 500 8.5px var(--f-m); letter-spacing: .06em; padding: 5px 8px; border-radius: 99px; border: 1px solid var(--line2); color: var(--mute) }
+/* laptop kiosk */
+.kio { display: grid; grid-template-columns: 1fr 250px }
+.kside { background: linear-gradient(180deg, #0d0f15, #090a0e); border-left: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 9px; min-width: 0 }
+.khead { display: flex; align-items: center; justify-content: space-between }
+.clock { font: 500 10px var(--f-m); color: var(--mute) }
+.kstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px }
+.kstats div { padding: 7px; border-radius: 10px; background: var(--s1); border: 1px solid var(--line) }
+.kstats b { display: block; font: 800 18px/1 var(--f-d) }
+.kstats small { font: 500 7px var(--f-m); letter-spacing: .12em; color: var(--mute) }
+.getapp { display: flex; gap: 10px; align-items: center; padding: 10px; border-radius: 14px; border: 1px solid rgba(91,140,255,.4); background: radial-gradient(90% 90% at 0% 0%, rgba(91,140,255,.2), transparent 70%), var(--s1) }
+.getapp canvas { width: 64px; height: 64px; border-radius: 8px; background: #F4F5F8; padding: 4px; image-rendering: pixelated; flex: none }
+.getapp b { display: block; font: 700 13px/1.15 var(--f-d) }
+.getapp span { display: block; font-size: 9.5px; color: var(--mute); margin-top: 2px }
+.getapp code { display: block; font: 500 8.5px var(--f-m); color: var(--acc); margin-top: 4px }
+.ticker { position: absolute; z-index: 6; left: 14px; bottom: 12px; right: 14px; display: flex; gap: 14px; font: 500 8.5px var(--f-m); letter-spacing: .1em; color: var(--mute) }
+.ticker b { color: var(--fg); font-weight: 500 }
+.notes { max-width: 820px; margin: 52px auto 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px }
+.note { padding: 14px; border-radius: 14px; background: var(--s1); border: 1px solid var(--line) }
+.note b { display: block; font: 700 14px var(--f-d); letter-spacing: -0.02em; margin-bottom: 4px }
+.note span { color: var(--mute); font-size: 12.5px }
+.note.new b::after { content: "NEW"; margin-left: 6px; font: 600 8px var(--f-m); letter-spacing: .1em; color: var(--acc-ink); background: var(--acc); padding: 2px 5px; border-radius: 4px; vertical-align: 2px }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important } }
+@media (max-width: 760px) { .kio { grid-template-columns: 1fr } .kside { display: none } }
+</style>
+</head>
+<body>
+<canvas id="field" aria-hidden="true"></canvas>
+<div class="wrap">
+<div class="eyebrow">Camera screen v2 · preview</div>
+<h1>Every pixel working.</h1>
+<p class="lead">A fuller heads-up display: live counters, distance tags, zoom and torch, an "In view" carousel, mode tabs and a five-button dock. Plus "Met today", a "Me" hub, a branded start screen and a stall-laptop kiosk with a download QR.</p>
+
+<template id="mk"><span class="m"><svg viewBox="0 0 44 26" fill="none"><circle cx="11" cy="15" r="8" stroke="#ECEDF1" stroke-width="3.4"/><circle cx="33" cy="15" r="8" stroke="#ECEDF1" stroke-width="3.4"/><rect x="20" y="2" width="4" height="22" rx="2" fill="#5B8CFF"/></svg></span></template>
+<template id="brand"><span class="mk"><span data-t="mk"></span><span><span class="w">aa<i>i</i>na</span><small>SEE WHO YOU'RE MEETING</small></span></span></template>
+<template id="rc"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="t n"></i><i class="t s"></i><i class="t w"></i><i class="t e"></i></template>
+<template id="p1"><svg width="150" height="290" viewBox="0 0 140 272"><ellipse cx="70" cy="106" rx="38" ry="48" fill="#a98370"/><path d="M32 98c0-34 18-55 40-55s38 19 38 49c-7-16-21-26-38-26S39 77 32 98Z" fill="#1f1815"/><path d="M0 272c4-62 32-102 70-102s66 40 70 102Z" fill="#2f3b52"/></svg></template>
+<template id="p2"><svg width="121" height="250" viewBox="0 0 116 240"><ellipse cx="58" cy="96" rx="30" ry="38" fill="#8e6c5c"/><path d="M28 92c2-28 16-42 32-42s29 16 29 40c-8-10-18-16-30-16S33 80 28 92Z" fill="#2e2521"/><path d="M0 240c4-50 26-82 58-82s54 32 58 82Z" fill="#4a3f36"/></svg></template>
+<template id="p3"><svg width="70" height="150" viewBox="0 0 116 240"><ellipse cx="58" cy="96" rx="30" ry="38" fill="#c49a84"/><path d="M28 92c2-28 16-42 32-42s29 16 29 40c-8-10-18-16-30-16S33 80 28 92Z" fill="#3a2a22"/><path d="M0 240c4-50 26-82 58-82s54 32 58 82Z" fill="#3b4a3a"/></svg></template>
+<template id="ic-met"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.9-3.2 3.2-5 6-5s5.1 1.8 6 5"/><path d="M16 4.5a3 3 0 0 1 0 6M18 14c1.6.6 2.6 2.2 3 5"/></svg></template>
+<template id="ic-qr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><path d="M14 14h2v2m4-2v6h-6v-2"/></svg></template>
+<template id="ic-flip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9a8 8 0 0 1 14-3l2 2M20 15a8 8 0 0 1-14 3l-2-2"/><path d="M20 4v4h-4M4 20v-4h4"/></svg></template>
+<template id="ic-torch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2 5 13h6l-1 9 8-11h-6l1-9Z"/></svg></template>
+<template id="ic-pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1.5"/><rect x="14" y="5" width="4" height="14" rx="1.5"/></svg></template>
+<template id="card-a"><div class="hd"><span class="av">AK</span><div><h4>Aravind K</h4><span class="op">● Verified</span></div></div>
+  <p class="st">Student · BCA, 3rd year<small>Christ University</small></p>
+  <div class="li"><b>in</b><span>in/aravind-k</span><i>↗</i></div></template>
+<template id="card-b"><div class="hd"><span class="av" style="background:linear-gradient(140deg,#9fb8ff,#4a6fd6)">PT</span><div><h4>Person Two</h4><span class="op">● Verified</span></div></div>
+  <p class="st">Guest<small>Aaina demo</small></p>
+  <div class="li"><b>in</b><span>in/person-two</span><i>↗</i></div></template>
+
+<div class="devices">
+
+  <!-- 0. Start screen -->
+  <div>
+    <div class="phone"><div class="scr">
+      <div class="start"><div>
+        <div class="ring"><span data-t="mk"></span></div>
+        <h5>aa<i>i</i>na</h5>
+        <p>See who you're meeting.</p>
+        <div class="bar"></div>
+        <div class="k">WARMING UP THE CAMERA</div>
+        <div class="chips"><span>OPT-IN ONLY</span><span>NO PHOTOS KEPT</span></div>
+      </div></div>
+    </div></div>
+    <div class="cap"><b>0 · First open</b><span>Branded start while the camera warms up (and quietly retries). A new user never sees a raw error.</span></div>
+  </div>
+
+  <!-- 1. Main HUD -->
+  <div>
+    <div class="phone"><div class="scr">
+      <div class="cam"><div class="per" style="left:-14px" data-t="p1"></div><div class="per" style="left:108px;bottom:120px;opacity:.85" data-t="p3"></div><div class="per" style="right:4px" data-t="p2"></div></div><div class="fade"></div><div class="vign"></div><div class="grid"></div>
+      <div class="top2"><span data-t="brand"></span><span class="evt">EXPO · DAY 1</span><span class="ava"><span>AK</span></span></div>
+      <div class="hudrow"><div class="stat k"><b>2</b><small>KNOWN</small></div><div class="stat u"><b>1</b><small>UNKNOWN</small></div><div class="stat m"><b>5</b><small>MET</small></div><span class="sp"></span><span class="tool on">1×</span><span class="tool">2×</span><span class="tool" data-t="ic-torch"></span></div>
+      <!-- faces -->
+      <div class="ret known" style="left:22px;top:322px;width:78px;height:100px" data-t="rc"></div>
+      <span class="dist" style="left:61px;top:428px">1.1 M</span>
+      <div class="ret known" style="left:153px;top:338px;width:64px;height:80px" data-t="rc"></div>
+      <span class="dist" style="left:185px;top:424px">1.6 M</span>
+      <div class="ret unk" style="left:126px;top:300px;width:34px;height:42px" data-t="rc"></div>
+      <span class="lbl" style="left:143px;top:292px">Unknown <small>· not stored</small></span>
+      <svg class="lead-ln" style="left:0;top:0" width="252" height="552"><path d="M61 315 L61 236"/><circle cx="61" cy="315" r="2.5"/><path d="M185 331 L185 292"/><circle cx="185" cy="331" r="2.5"/></svg>
+      <div class="arc sm" style="left:8px;top:112px;width:116px" data-t="card-a"></div>
+      <div class="arc sm" style="left:132px;top:168px;width:112px" data-t="card-b"></div>
+      <div class="car"><div class="mini on"><span class="av">AK</span><div><b>Aravind K</b><small>Student · BCA</small></div></div><div class="mini on"><span class="av" style="background:linear-gradient(140deg,#9fb8ff,#4a6fd6)">PT</span><div><b>Person Two</b><small>Guest · Aaina demo</small></div></div><div class="mini u"><span class="av">?</span><div><b>Unknown</b><small>nothing stored</small></div></div></div>
+      <div class="modes"><span>QR</span><span class="on">FACES</span><span>MIRROR</span></div>
+      <div class="dock2">
+        <span class="side-btn"><span data-t="ic-met"></span><span class="badge">5</span></span>
+        <span class="side-btn" data-t="ic-qr"></span>
+        <span class="shutter"><i data-t="ic-pause"></i><span class="sl">SCANNING</span></span>
+        <span class="side-btn" data-t="ic-flip"></span>
+        <span class="side-btn" style="padding:0"><span class="ava" style="width:28px;height:28px"><span>AK</span></span></span>
+      </div>
+    </div></div>
+    <div class="cap"><b>1 · Live HUD</b><span>Counters (known / unknown / met), distance under each face, zoom + torch, "In view" carousel, mode tabs, and a big scan button (tap = pause, nothing sent while paused).</span></div>
+  </div>
+
+  <!-- 2. Met today -->
+  <div>
+    <div class="phone"><div class="scr">
+      <div class="cam" style="filter:blur(2px) brightness(.7)"><div class="per" style="left:-14px" data-t="p1"></div></div>
+      <div class="dimmer"></div>
+      <div class="sh">
+        <div class="grab"></div>
+        <h3>Met today <small>5 PEOPLE</small></h3>
+        <p class="s">Everyone Aaina recognised for you. Kept on this phone only, cleared when you close the app.</p>
+        <div class="row2"><span class="av">AK</span><div><b>Aravind K</b><small>Student · Christ University</small></div><span class="t"><em>IN VIEW</em>now</span></div>
+        <div class="row2"><span class="av" style="background:linear-gradient(140deg,#9fb8ff,#4a6fd6)">PT</span><div><b>Person Two</b><small>Guest · Aaina demo</small></div><span class="t"><em>IN VIEW</em>now</span></div>
+        <div class="row2"><span class="av" style="background:linear-gradient(140deg,#b39bff,#6a4fd6)">MS</span><div><b>Meera S</b><small>Android Developer · Nimbus</small></div><span class="t">4 min ago</span></div>
+        <div class="row2"><span class="av" style="background:linear-gradient(140deg,#8fe3c4,#2f9c7a)">RN</span><div><b>Rahul N</b><small>Student · MCA, 1st year</small></div><span class="t">12 min ago</span></div>
+        <div class="acts" style="display:flex;gap:8px;margin-top:10px"><div class="btn" style="margin:0;flex:1;height:40px;font-size:12px">Save all as contacts</div><div class="btn" style="margin:0;flex:0 0 64px;height:40px;font-size:12px;background:transparent;color:var(--fg);border:1px solid var(--line2)">Clear</div></div>
+      </div>
+    </div></div>
+    <div class="cap"><b>2 · Met today</b><span>Your networking list for the event. Tap anyone for their full card, or save them all at once.</span></div>
+  </div>
+
+  <!-- 3. Me hub -->
+  <div>
+    <div class="phone"><div class="scr">
+      <div class="cam" style="filter:blur(2px) brightness(.7)"><div class="per" style="left:-14px" data-t="p1"></div></div>
+      <div class="dimmer"></div>
+      <div class="sh">
+        <div class="grab"></div>
+        <div class="mecard"><div class="hd"><span class="av">AK</span><div><h4>Aravind K</h4><div class="v">● VISIBLE · 6 DETAILS SHARED</div></div></div>
+          <svg class="wm" viewBox="0 0 44 26" fill="none"><circle cx="11" cy="15" r="8" stroke="#fff" stroke-width="3.4"/><circle cx="33" cy="15" r="8" stroke="#fff" stroke-width="3.4"/><rect x="20" y="2" width="4" height="22" rx="2" fill="#fff"/></svg></div>
+        <div class="row2" style="margin-top:8px"><div><b>Visible to others</b><small>Off = you show as Unknown to everyone</small></div><span class="sw"></span></div>
+        <div class="grid2">
+          <div class="tile"><span data-t="ic-qr"></span>My Aaina code</div>
+          <div class="tile"><span data-t="ic-flip"></span>Mirror check</div>
+          <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12a8 8 0 0 1 16 0M7.5 12a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>Laptop · 42 ms</div>
+          <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Sign out</div>
+        </div>
+        <div class="fine" style="margin-top:10px">EDIT PROFILE + DELETE MY DATA ARRIVE IN MILESTONE 8</div>
+      </div>
+    </div></div>
+    <div class="cap"><b>3 · Me</b><span>Your avatar (top right) opens your hub: your card, a one-tap hide switch, your code, mirror check, connection and sign out.</span></div>
+  </div>
+</div>
+
+<h2>Stall laptop · kiosk</h2>
+<p class="lead">Big-screen view for the stall. Visitors see themselves recognised live, and can scan the QR to install Aaina from the laptop over Wi-Fi.</p>
+<div class="devices">
+  <div class="laptop">
+    <div class="lid"><div class="lscr kio">
+      <div class="lcam" style="position:relative;overflow:hidden">
+        <div class="cam"><div class="per" style="left:12%;transform:scale(1.15);transform-origin:bottom" data-t="p1"></div><div class="per" style="right:12%;opacity:.9" data-t="p2"></div></div>
+        <div class="fade"></div><div class="vign"></div><div class="grid"></div>
+        <div class="top2" style="top:12px;left:14px;right:14px"><span data-t="brand"></span><span class="evt">EXPO · DAY 1</span><span class="pill"><span class="bars"><i></i><i></i><i></i></span>Live · 2</span></div>
+        <div class="ret known" style="left:98px;top:190px;width:100px;height:124px" data-t="rc"></div>
+        <span class="dist" style="left:148px;top:320px">0.9 M</span>
+        <svg class="lead-ln" style="left:198px;top:140px" width="40" height="120"><path d="M0 110 L16 110 L28 20 L40 20"/><circle cx="0" cy="110" r="2.5"/></svg>
+        <div class="arc" style="left:238px;top:110px;width:160px" data-t="card-a"></div>
+        <div class="ret known" style="left:462px;top:248px;width:70px;height:88px" data-t="rc"></div>
+        <div class="arc sm" style="left:418px;top:110px;width:124px" data-t="card-b"></div>
+        <div class="ticker"><span>MODEL <b>BUFFALO_S</b></span><span>THRESHOLD <b>0.38</b></span><span>SCAN <b>130 MS</b></span><span>UNKNOWN FACES <b>NEVER STORED</b></span></div>
+      </div>
+      <div class="kside">
+        <div class="khead"><span style="font:500 9px var(--f-m);letter-spacing:.14em;color:var(--mute)">STALL VIEW</span><span class="clock">11:42</span></div>
+        <div class="kstats"><div><b style="color:var(--acc)">2</b><small>IN VIEW</small></div><div><b style="color:var(--ok)">37</b><small>MET TODAY</small></div><div><b>14</b><small>OPTED IN</small></div></div>
+        <div class="row on"><span class="av">AK</span><div><b>Aravind K</b><small>Student · Christ University</small></div></div>
+        <div class="row on"><span class="av" style="background:linear-gradient(140deg,#9fb8ff,#4a6fd6)">PT</span><div><b>Person Two</b><small>Guest · Aaina demo</small></div></div>
+        <div class="getapp"><canvas class="qrc" data-seed="11"></canvas><div><b>Get Aaina</b><span>Scan with your phone camera to install (same Wi-Fi).</span><code>192.168.31.244:8000/get-app</code></div></div>
+        <div class="join" style="margin-top:auto"><b>Join here</b><span>No Android? Sign up on this laptop in a minute.</span><div class="btn">Sign up on this laptop</div></div>
+      </div>
+    </div></div>
+    <div class="base"></div>
+    <div class="cap" style="max-width:560px"><b>4 · Kiosk</b><span>Live stats, who's in view, a "Get Aaina" QR that downloads the app from this laptop, and a tech ticker for judges (model, threshold, speed, privacy).</span></div>
+  </div>
+</div>
+
+<div class="notes">
+  <div class="note new"><b>Met today</b><span>Session list of everyone recognised. Phone memory only, gone when the app closes.</span></div>
+  <div class="note new"><b>Me hub</b><span>Hide-me switch works now (the server already supports it). Edit and delete come in M8.</span></div>
+  <div class="note new"><b>Zoom + torch</b><span>2× for faces across the stall, torch for dark halls. Back camera only.</span></div>
+  <div class="note new"><b>Distance tags</b><span>Rough metres from face size. "Move closer" appears past about 2.5 m.</span></div>
+  <div class="note new"><b>Pause scanning</b><span>Big button stops sending faces instantly: a visible privacy control for judges.</span></div>
+  <div class="note new"><b>Get Aaina QR</b><span>Kiosk shows a QR for the APK link, so visitors install without cables.</span></div>
+</div>
+</div>
+<script>
+for (let pass = 0; pass < 3; pass++) document.querySelectorAll("[data-t]").forEach(el => {
+  const part = document.getElementById(el.dataset.t).content.cloneNode(true);
+  if (el.matches(".per, .ret, .arc, .tool, .side-btn, .shutter i, .tile > span")) { el.prepend(part); el.removeAttribute("data-t"); } else el.replaceWith(part);
+});
+document.querySelectorAll(".qrc").forEach(cv => {
+  const n = 25, s = 8; cv.width = cv.height = n * s; const g = cv.getContext("2d");
+  let seed = +cv.dataset.seed; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  g.fillStyle = "#F4F5F8"; g.fillRect(0, 0, n * s, n * s); g.fillStyle = "#0B0D12";
+  const finder = (x, y) => (x < 8 && y < 8) || (x > n - 9 && y < 8) || (x < 8 && y > n - 9);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (!finder(x, y) && rnd() > .52) g.fillRect(x * s, y * s, s, s);
+  [[0, 0], [n - 7, 0], [0, n - 7]].forEach(([x, y]) => { g.fillRect(x * s, y * s, 7 * s, 7 * s); g.fillStyle = "#F4F5F8"; g.fillRect((x + 1) * s, (y + 1) * s, 5 * s, 5 * s); g.fillStyle = "#0B0D12"; g.fillRect((x + 2) * s, (y + 2) * s, 3 * s, 3 * s); });
+});
+const c = document.getElementById("field"), x = c.getContext("2d");
+let w, h, dots = [];
+function size() { w = c.width = innerWidth * devicePixelRatio; h = c.height = innerHeight * devicePixelRatio;
+  dots = []; const gp = 26 * devicePixelRatio; for (let i = gp / 2; i < w; i += gp) for (let j = gp / 2; j < h; j += gp) dots.push([i, j, Math.random() * 6.28]); }
+size(); addEventListener("resize", size);
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function draw(t) { x.clearRect(0, 0, w, h);
+  for (const [i, j, p] of dots) { const a = .05 + .07 * (still ? .5 : (Math.sin(t / 1400 + p + i / 400) + 1) / 2);
+    x.fillStyle = `rgba(140,165,255,${a})`; x.fillRect(i, j, 1.4 * devicePixelRatio, 1.4 * devicePixelRatio); }
+  if (!still) requestAnimationFrame(draw); }
+requestAnimationFrame(draw);
+</script>
+</body></html>

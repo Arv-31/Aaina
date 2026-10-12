@@ -7,11 +7,14 @@ Run from the backend folder (the server does NOT need to be running):
 It uses a temporary, throwaway database (your real data/aaina.db is never touched) and the
 photos in test_photos/ (needs 2 people: one with 5+ photos, one with 3+). Photos are only read
 into memory. It prints PASS/FAIL for each check and deletes the temporary database at the end.
+
+To run the same checks on Supabase (Postgres) instead of SQLite:
+    .venv\Scripts\python tools\test_backend.py --postgres "<your SUPABASE_DB_URL>"
+It uses a separate "aaina_test" schema and removes it afterwards; your real tables are untouched.
 """
 
 import os
 import shutil
-import sqlite3
 import sys
 import tempfile
 import time
@@ -20,6 +23,11 @@ from datetime import datetime, timedelta
 # Use a throwaway database and a test admin login BEFORE the app reads its settings.
 TMP_DIR = tempfile.mkdtemp(prefix="aaina_test_")
 os.environ["DB_PATH"] = os.path.join(TMP_DIR, "test.db")
+PG_URL = sys.argv[sys.argv.index("--postgres") + 1] if "--postgres" in sys.argv else ""
+if PG_URL:
+    os.environ["DB_BACKEND"] = "supabase"
+    os.environ["SUPABASE_DB_URL"] = PG_URL
+    os.environ["DB_SCHEMA"] = "aaina_test"
 import pyotp  # noqa: E402
 
 TEST_SECRET = pyotp.random_base32()
@@ -39,11 +47,24 @@ import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import matcher  # noqa: E402
+from app import db, matcher  # noqa: E402
 from app.main import app, run_auto_delete  # noqa: E402
 
 PHOTOS = os.path.join(os.path.dirname(__file__), "..", "test_photos")
 results = []
+
+
+def run_sql(sql, params=()):
+    """Change the test database directly (e.g. pretend time has passed). Works on both engines."""
+    with db.connect() as conn:
+        cur = conn.execute(sql, params)
+        return cur.fetchone() if cur.description else None
+
+
+def drop_pg_test_schema():
+    with db.connect() as conn:
+        conn.execute('DROP SCHEMA IF EXISTS "aaina_test" CASCADE')
+        conn.execute('CREATE SCHEMA "aaina_test"')
 
 
 def check(name, ok, extra=""):
@@ -84,7 +105,10 @@ def scan(client, token, photo):
 
 def main():
     (a_name, a_photos), (b_name, b_photos) = load_people()
-    print(f"\nUsing '{a_name}' ({len(a_photos)} photos) and '{b_name}' ({len(b_photos)} photos)\n")
+    print(f"\nUsing '{a_name}' ({len(a_photos)} photos) and '{b_name}' ({len(b_photos)} photos)")
+    print(f"Database: {db.describe()}\n")
+    if PG_URL:
+        drop_pg_test_schema()   # start from empty tables, like the fresh SQLite file
 
     with TestClient(app) as client:   # "with" runs the startup step (loads the model)
         print("Account")
@@ -127,6 +151,14 @@ def main():
             face = scan(client, token_a, photo)
             check(f"{b_name} photo {i} (not enrolled) shows Unknown", face["status"] == "unknown" and face["card"] is None, face)
 
+        print("Laptop webcam boxes (/detect)")
+        r = client.post("/detect", files=one(a_photos[0]))
+        check("/detect is refused from another device", r.status_code == 403, r.text)
+        local = TestClient(app, client=("127.0.0.1", 50000))   # pretend to be the laptop itself
+        r = local.post("/detect", files=one(a_photos[0]))
+        check("/detect on the laptop returns 1 box and no name", r.status_code == 200
+              and len(r.json()["boxes"]) == 1 and "card" not in r.text, r.text)
+
         print("\nProfile card + sharing (extra B)")
         card = scan(client, token_a, a_photos[3])["card"]
         check("empty fields are left out of the card", "company" not in card and "instagram_url" not in card, card)
@@ -157,11 +189,8 @@ def main():
         check("enrolling someone else's already-registered face is refused", r.get("reason") == "already_enrolled", r)
         r = client.post("/enroll", files=files(*b_photos[:3]), headers=auth(token_b)).json()
         check(f"{b_name} can enroll on a borrowed login", r["enrolled"], r)
-        conn = sqlite3.connect(os.environ["DB_PATH"])
-        conn.execute("UPDATE sessions SET last_used = ? WHERE user_id = (SELECT id FROM users WHERE username='bob')",
-                     (int(time.time()) - 11 * 60,))
-        conn.commit()
-        conn.close()
+        run_sql("UPDATE sessions SET last_used = ? WHERE user_id = (SELECT id FROM users WHERE username='bob')",
+                (int(time.time()) - 11 * 60,))
         check("borrowed login expires after 10 idle minutes", client.get("/me", headers=auth(token_b)).status_code == 401)
 
         print("\nAdmin")
@@ -184,10 +213,8 @@ def main():
         check("login is gone after delete", client.get("/me", headers=auth(token_a)).status_code == 401)
         token_c = client.post("/auth/signup", json={**bob, "username": "carol", "borrowed": False}).json()["token"]
         check("deleted user's face now shows Unknown", scan(client, token_c, a_photos[3])["status"] == "unknown")
-        conn = sqlite3.connect(os.environ["DB_PATH"])
-        left = sum(conn.execute(f"SELECT COUNT(*) FROM {t} WHERE user_id = ?", (alice_id,)).fetchone()[0]
+        left = sum(run_sql(f"SELECT COUNT(*) AS n FROM {t} WHERE user_id = ?", (alice_id,))["n"]
                    for t in ["face_embeddings", "consents", "sessions", "recognitions"])
-        conn.close()
         check("no rows about the deleted user remain in any table", left == 0, left)
         stored = [f for f in os.listdir(TMP_DIR) if not f.startswith("test.db")]
         check("no photo files were saved anywhere", stored == [], stored)
@@ -220,10 +247,7 @@ def main():
         check("wipe needs the event name typed again", r.status_code == 400)
 
         # Pretend the delete date has passed, then run the hourly auto-delete check.
-        conn = sqlite3.connect(os.environ["DB_PATH"])
-        conn.execute("UPDATE events SET delete_after = ? WHERE name = 'Test Expo'", (int(time.time()) - 1,))
-        conn.commit()
-        conn.close()
+        run_sql("UPDATE events SET delete_after = ? WHERE name = 'Test Expo'", (int(time.time()) - 1,))
         wiped = run_auto_delete()
         names = [u["name"] for u in client.get("/admin/users", headers=admin).json()]
         check("auto-delete removes the event's users after the date", wiped == {"Test Expo": 1} and "Dave Expo" not in names, wiped)
@@ -237,6 +261,8 @@ def main():
         events = client.get("/admin/events", headers=admin).json()
         check("wiped events disappear from the list", events == [], events)
 
+    if PG_URL:
+        drop_pg_test_schema()
     shutil.rmtree(TMP_DIR, ignore_errors=True)
     passed = sum(results)
     print(f"\n{passed} of {len(results)} checks passed.\n")

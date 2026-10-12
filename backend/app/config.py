@@ -19,6 +19,14 @@ def _int(name, default):
 
 
 class Settings:
+    # Which database: "sqlite" (a file on this laptop, works offline, default)
+    # or "supabase" (free cloud Postgres; needs internet and SUPABASE_DB_URL).
+    db_backend = os.getenv("DB_BACKEND", "sqlite").strip().lower()
+    supabase_db_url = os.getenv("SUPABASE_DB_URL", "")
+    # Postgres schema (folder of tables) Aaina uses. Not "public", so Supabase's
+    # automatic REST API can't reach these tables.
+    db_schema = os.getenv("DB_SCHEMA", "aaina")
+
     # Where the SQLite database file lives (relative paths are inside backend/).
     db_path = os.getenv("DB_PATH", "data/aaina.db")
     if not os.path.isabs(db_path):

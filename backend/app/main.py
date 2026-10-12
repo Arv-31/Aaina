@@ -5,6 +5,7 @@ Then open http://localhost:8000/docs to try every route in the browser.
 Who can call what:
   anyone          GET /health, POST /auth/signup, POST /auth/login
   logged-in user  /me (view, edit, hide, delete-my-data), /enroll, /recognize, /qr/{code}
+  this laptop     POST /detect (face boxes only, for the laptop-webcam camera screen)
   admin           /admin/... (ID + password + one-time code; web console only)
 The app sends its login token in the header:  Authorization: Bearer <token>
 """
@@ -13,10 +14,13 @@ import asyncio
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
+from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 
 from app import db, face_engine, matcher, quality, security
 from app.config import settings
@@ -49,6 +53,7 @@ async def lifespan(app):
     matcher.reload()
     face_engine.get_model()  # load now so the first scan isn't slow
     event = db.get_current_event()
+    print(f"[aaina] Database: {db.describe()}")
     print(f"[aaina] Ready. {matcher.count()} face embeddings loaded. "
           f"Event: {event['name'] if event else 'none'}. "
           f"Admin login {'ON' if security.admin_configured() else 'OFF (run tools/setup_admin.py)'}.")
@@ -273,6 +278,25 @@ async def recognize(photo: UploadFile = File(..., description="A face crop or a 
     return {"image_size": [width, height], "faces": results}
 
 
+@app.post("/detect", tags=["scan"])
+async def detect(request: Request,
+                 photo: UploadFile = File(..., description="A camera frame from the laptop webcam")):
+    """
+    Face boxes only: no names, no matching, nothing stored or logged.
+    Used when the camera screen runs in a browser on this laptop (the phone app
+    finds faces itself with ML Kit). Only accepted from this laptop itself.
+    """
+    if request.client is None or request.client.host not in ("127.0.0.1", "::1", "localhost"):
+        raise HTTPException(403, "Face boxes are only available on the server laptop itself.")
+    img = face_engine.decode_image(await _read_photo(photo))
+    if img is None:
+        raise HTTPException(400, "Couldn't read that image.")
+    height, width = img.shape[:2]
+    boxes = face_engine.detect_boxes(img)
+    del img  # the photo is discarded here
+    return {"image_size": [width, height], "boxes": boxes}
+
+
 @app.get("/qr/{code}", tags=["scan"])
 def qr_lookup(code: str, _=Depends(user_or_admin)):
     """QR fallback (extra A): scan someone's QR code (aaina:xxxx) to see their card."""
@@ -376,3 +400,29 @@ def admin_wipe_event(name: str, confirm: str = Query(..., description="Type the 
     count = db.wipe_event(name)
     matcher.reload()
     return {"event": name, "users_deleted": count}
+
+
+# ---------- the app itself: laptop browser version + APK download ----------
+# tools/publish_app.py copies the Flutter builds into backend/public/:
+#   public/app/      -> http://localhost:8000/app/   (stall laptop, uses its webcam)
+#   public/Aaina.apk -> http://<laptop-ip>:8000/get-app (phones install over Wi-Fi)
+PUBLIC = Path(__file__).resolve().parent.parent / "public"
+
+
+@app.get("/", include_in_schema=False)
+def home():
+    """Opening the server address in a browser goes straight to the app."""
+    return RedirectResponse("/app/" if (PUBLIC / "app").exists() else "/docs")
+
+
+@app.get("/get-app", tags=["public"])
+def get_app():
+    """Download the Android app (APK) from this laptop. No account needed."""
+    apk = PUBLIC / "Aaina.apk"
+    if not apk.exists():
+        raise HTTPException(404, "No APK published yet. Run tools/publish_app.py on the laptop.")
+    return FileResponse(apk, filename="Aaina.apk", media_type="application/vnd.android.package-archive")
+
+
+if (PUBLIC / "app").exists():
+    app.mount("/app", StaticFiles(directory=PUBLIC / "app", html=True), name="web-app")

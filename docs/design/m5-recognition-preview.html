@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aaina Recognition Screens</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Milestone 5 preview v2: AR heads-up style. Tokens match the locked design (aaina-design-preview.html). */
+:root {
+  --bg: #07080B; --s1: #0E1015; --s2: #151821;
+  --line: rgba(255,255,255,.07); --line2: rgba(255,255,255,.12);
+  --fg: #ECEDF1; --mute: #8A8E99; --dim: #5A5E69;
+  --acc: #5B8CFF; --acc-ink: #050814; --ok: #3DDC97; --warn: #FFB547;
+  --li: #0A66C2;
+  --f-d: "Bricolage Grotesque", sans-serif; --f-b: "Geist", system-ui, sans-serif; --f-m: "Geist Mono", monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--f-b); -webkit-font-smoothing: antialiased; padding: 36px 16px 64px; overflow-x: hidden }
+#field { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none }
+.wrap { position: relative; z-index: 1; max-width: 1240px; margin: 0 auto }
+.eyebrow { font: 500 11px var(--f-m); letter-spacing: .14em; text-transform: uppercase; color: var(--acc); text-align: center }
+h1 { font: 800 clamp(28px, 4vw, 42px)/1.05 var(--f-d); letter-spacing: -0.035em; margin: 8px 0; text-align: center }
+h2 { font: 700 22px/1.1 var(--f-d); letter-spacing: -0.03em; margin: 56px 0 6px; text-align: center }
+.lead { color: var(--mute); text-align: center; margin: 0 auto 34px; max-width: 64ch }
+.devices { display: flex; flex-wrap: wrap; gap: 30px 26px; justify-content: center }
+.cap { text-align: center; margin-top: 14px; max-width: 270px; margin-inline: auto }
+.cap b { display: block; font: 500 11px var(--f-m); letter-spacing: .12em; text-transform: uppercase; color: var(--acc); margin-bottom: 4px }
+.cap span { color: var(--mute); font-size: 12.5px }
+
+/* ---------- device shells ---------- */
+.phone { width: 270px; aspect-ratio: 270 / 570; border-radius: 42px; padding: 9px; background: #000; box-shadow: 0 0 0 1px #24262E, 0 40px 80px -30px rgba(0,0,0,.9) }
+.scr { position: relative; width: 100%; height: 100%; border-radius: 34px; overflow: hidden; background: var(--bg) }
+.laptop { width: min(900px, 100%); }
+.lid { border-radius: 16px 16px 0 0; padding: 12px 12px 14px; background: #0b0c10; box-shadow: 0 0 0 1px #24262E }
+.lscr { position: relative; aspect-ratio: 16 / 9.4; border-radius: 6px; overflow: hidden; background: var(--bg); display: grid; grid-template-columns: 1fr 230px }
+.base { height: 14px; margin: 0 -4%; border-radius: 0 0 14px 14px; background: linear-gradient(180deg, #1a1c22, #0d0e12); box-shadow: 0 30px 60px -20px rgba(0,0,0,.9) }
+
+/* ---------- camera picture (drawn stand-in) ---------- */
+.cam { position: absolute; inset: 0; overflow: hidden; background:
+  radial-gradient(50% 35% at 82% 18%, #5d6474 0%, transparent 65%),
+  radial-gradient(120% 70% at 30% 30%, #464b57 0%, #20232a 55%, #0f1115 100%) }
+.per { position: absolute; bottom: 0 }
+.per svg { display: block }
+.fade { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0,0,0,.66), transparent 18%, transparent 64%, rgba(0,0,0,.85)) }
+.vign { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 80px rgba(0,0,0,.55) }
+/* faint HUD grid + lens corners: the view feels like an instrument, not a void */
+.grid { position: absolute; inset: 0; pointer-events: none; opacity: .5;
+  background-image: linear-gradient(rgba(140,165,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(140,165,255,.05) 1px, transparent 1px);
+  background-size: 28px 28px; mask-image: radial-gradient(80% 60% at 50% 50%, #000 30%, transparent 80%) }
+.lens { position: absolute; inset: 64px 12px 132px; pointer-events: none }
+.lens i { position: absolute; width: 14px; height: 14px; border: 0 solid rgba(255,255,255,.25) }
+.lens i:nth-child(1) { top: 0; left: 0; border-top-width: 1.5px; border-left-width: 1.5px }
+.lens i:nth-child(2) { top: 0; right: 0; border-top-width: 1.5px; border-right-width: 1.5px }
+.lens i:nth-child(3) { bottom: 0; left: 0; border-bottom-width: 1.5px; border-left-width: 1.5px }
+.lens i:nth-child(4) { bottom: 0; right: 0; border-bottom-width: 1.5px; border-right-width: 1.5px }
+.lens .rd { position: absolute; left: 0; bottom: -18px; font: 500 8.5px var(--f-m); letter-spacing: .12em; color: rgba(255,255,255,.35) }
+.lens .rd.r { left: auto; right: 0 }
+
+/* ---------- top bar ---------- */
+.top { position: absolute; z-index: 6; top: 38px; left: 12px; right: 12px; display: flex; align-items: center; gap: 6px }
+.logo { display: inline-flex; align-items: center; gap: 6px; margin-right: auto }
+.logo svg { height: 14px }
+.logo .w { font: 700 16px/1 var(--f-d); letter-spacing: -0.035em }
+.logo .w i { font-style: normal; color: var(--acc) }
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 25px; padding: 0 9px; border-radius: 99px; font: 500 10.5px var(--f-b); background: rgba(8,9,12,.55); border: 1px solid var(--line2); backdrop-filter: blur(10px); white-space: nowrap; color: var(--fg) }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: blink 1.6s ease-in-out infinite }
+.dot.d { background: var(--dim); box-shadow: none; animation: none }
+.bars { display: inline-flex; gap: 1.5px; align-items: flex-end; height: 9px }
+.bars i { width: 2px; background: var(--ok); border-radius: 1px } .bars i:nth-child(1) { height: 3px } .bars i:nth-child(2) { height: 6px } .bars i:nth-child(3) { height: 9px }
+@keyframes blink { 50% { opacity: .35 } }
+
+/* ---------- face reticle ---------- */
+.ret { position: absolute; z-index: 3; --c: rgba(255,255,255,.55) }
+.ret .c { position: absolute; width: 15px; height: 15px; border: 0 solid var(--c) }
+.ret .c:nth-child(1) { top: 0; left: 0; border-top-width: 2.5px; border-left-width: 2.5px; border-top-left-radius: 9px }
+.ret .c:nth-child(2) { top: 0; right: 0; border-top-width: 2.5px; border-right-width: 2.5px; border-top-right-radius: 9px }
+.ret .c:nth-child(3) { bottom: 0; left: 0; border-bottom-width: 2.5px; border-left-width: 2.5px; border-bottom-left-radius: 9px }
+.ret .c:nth-child(4) { bottom: 0; right: 0; border-bottom-width: 2.5px; border-right-width: 2.5px; border-bottom-right-radius: 9px }
+.ret .t { position: absolute; background: var(--c); opacity: .7 } /* mid-edge ticks */
+.ret .t.n { top: -6px; left: 50%; width: 1.5px; height: 6px } .ret .t.s { bottom: -6px; left: 50%; width: 1.5px; height: 6px }
+.ret .t.w { left: -6px; top: 50%; height: 1.5px; width: 6px } .ret .t.e { right: -6px; top: 50%; height: 1.5px; width: 6px }
+.ret.known { --c: var(--acc); filter: drop-shadow(0 0 8px rgba(91,140,255,.7)) }
+.ret.known::after { content: ""; position: absolute; inset: 0; border-radius: 12px; border: 1px solid rgba(91,140,255,.28); background: radial-gradient(70% 70% at 50% 45%, rgba(91,140,255,.10), transparent 70%) }
+.ret.lock { animation: lock .5s cubic-bezier(.2,1.3,.4,1) both }
+@keyframes lock { from { transform: scale(1.35); opacity: 0 } }
+.ret.unk { --c: rgba(255,255,255,.35) }
+/* checking: dashed ring that fills + scan dots on the face */
+.ring { position: absolute; z-index: 3; pointer-events: none; overflow: visible }
+.ring .bg { fill: none; stroke: rgba(255,255,255,.12); stroke-width: 2 }
+.ring .fg { fill: none; stroke: var(--acc); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 60 400; animation: fill 1.3s linear infinite; filter: drop-shadow(0 0 4px rgba(91,140,255,.8)) }
+@keyframes fill { to { stroke-dashoffset: -460 } }
+.mesh { position: absolute; z-index: 2; border-radius: 50%; pointer-events: none;
+  background-image: radial-gradient(rgba(140,175,255,.9) 1px, transparent 1.4px); background-size: 9px 9px;
+  mask-image: linear-gradient(180deg, transparent, #000 40%, #000 60%, transparent); mask-size: 100% 220%; animation: meshScan 1.3s linear infinite; opacity: .7 }
+@keyframes meshScan { from { mask-position: 0 120% } to { mask-position: 0 -120% } }
+
+/* ---------- labels ---------- */
+.lbl { position: absolute; z-index: 5; transform: translate(-50%, -100%); display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 99px; font: 500 10px var(--f-m); letter-spacing: .06em; text-transform: uppercase; background: rgba(10,12,17,.7); border: 1px solid var(--line2); backdrop-filter: blur(10px); white-space: nowrap; color: var(--mute) }
+.lbl.acc { color: var(--acc); border-color: rgba(91,140,255,.4) }
+
+/* ---------- AR card with leader line ---------- */
+.lead-ln { position: absolute; z-index: 4; overflow: visible; pointer-events: none }
+.lead-ln path { fill: none; stroke: rgba(91,140,255,.75); stroke-width: 1.2; stroke-dasharray: 3 3 }
+.lead-ln circle { fill: var(--acc); filter: drop-shadow(0 0 4px var(--acc)) }
+.arc { position: absolute; z-index: 5; width: 148px; padding: 10px 10px 9px; border-radius: 15px;
+  background: linear-gradient(160deg, rgba(22,26,38,.82), rgba(10,12,17,.78)); backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid transparent; background-clip: padding-box; box-shadow: 0 16px 34px -10px rgba(0,0,0,.8);
+  animation: cardIn .45s .1s cubic-bezier(.2,1.2,.4,1) both }
+.arc::before { content: ""; position: absolute; inset: -1px; border-radius: 16px; padding: 1px; pointer-events: none;
+  background: linear-gradient(140deg, rgba(91,140,255,.9), rgba(91,140,255,.1) 45%, rgba(255,255,255,.18));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude }
+@keyframes cardIn { from { opacity: 0; transform: translateX(-10px) scale(.92) } }
+.arc .hd { display: flex; align-items: center; gap: 8px }
+.av { width: 30px; height: 30px; border-radius: 9px; flex: none; display: grid; place-items: center; font: 700 12px var(--f-d); color: var(--acc-ink); background: linear-gradient(140deg, #7fa5ff, #3b5fc0) }
+.arc h4 { margin: 0; font: 700 14px/1.1 var(--f-d); letter-spacing: -0.02em }
+.arc .op { display: inline-flex; align-items: center; gap: 4px; font: 500 9px var(--f-b); color: var(--ok); margin-top: 2px }
+.arc .st { margin: 8px 0 0; font-size: 11px; line-height: 1.35; color: var(--fg) }
+.arc .st small { display: block; color: var(--mute); font-size: 10.5px }
+.li { margin-top: 8px; display: flex; align-items: center; gap: 7px; padding: 6px 7px; border-radius: 9px; background: rgba(10,102,194,.16); border: 1px solid rgba(10,102,194,.35); font-size: 10.5px; color: var(--fg) }
+.li b { width: 17px; height: 17px; border-radius: 4px; background: var(--li); color: #fff; display: grid; place-items: center; font: 700 9px var(--f-b); flex: none }
+.li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.li i { margin-left: auto; font-style: normal; color: var(--mute) }
+
+/* ---------- bottom: in-view strip + dock ---------- */
+.strip { position: absolute; z-index: 6; left: 12px; right: 12px; bottom: 80px; display: flex; gap: 7px; align-items: center }
+.strip .k { white-space: nowrap; font: 500 8.5px var(--f-m); letter-spacing: .12em; color: var(--mute); text-transform: uppercase; margin-right: 2px }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 3px; border-radius: 99px; background: rgba(10,12,17,.66); border: 1px solid var(--line2); backdrop-filter: blur(10px); font-size: 10.5px; white-space: nowrap }
+.chip .av { width: 24px; height: 24px; border-radius: 50%; font-size: 9.5px }
+.chip.on { border-color: rgba(91,140,255,.55); box-shadow: 0 0 0 3px rgba(91,140,255,.10) }
+.chip.u .av { background: #2A2E3A; color: var(--mute) }
+.dock { position: absolute; z-index: 6; left: 12px; right: 12px; bottom: 20px; display: flex; gap: 9px; align-items: center }
+.main { flex: 1; height: 48px; border-radius: 99px; background: var(--acc); color: var(--acc-ink); font: 600 13px var(--f-b); display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 10px 30px -10px rgba(91,140,255,.75) }
+.main.off { background: rgba(8,9,12,.6); color: var(--fg); border: 1px solid rgba(91,140,255,.55); box-shadow: none }
+.main .rg { width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; animation: blink 1.6s ease-in-out infinite }
+.ic { width: 48px; height: 48px; border-radius: 50%; background: rgba(8,9,12,.55); border: 1px solid rgba(255,255,255,.14); backdrop-filter: blur(10px); display: grid; place-items: center; color: var(--fg); flex: none }
+.ic svg { width: 19px; height: 19px }
+
+/* ---------- connect sheet ---------- */
+.dimmer { position: absolute; inset: 0; z-index: 7; background: rgba(4,5,8,.55); backdrop-filter: blur(4px) }
+.sheet { position: absolute; z-index: 8; left: 0; right: 0; bottom: 0; padding: 10px 18px 20px; border-radius: 26px 26px 0 0; background: linear-gradient(180deg, #131722, #0b0d12); border-top: 1px solid var(--line2); box-shadow: 0 -20px 50px rgba(0,0,0,.6) }
+.grab { width: 36px; height: 4px; border-radius: 4px; background: var(--line2); margin: 0 auto 14px }
+.sheet h3 { margin: 0; font: 700 20px/1.1 var(--f-d); letter-spacing: -0.03em }
+.sheet p { margin: 4px 0 10px; color: var(--mute); font-size: 11.5px }
+.steps { display: flex; gap: 6px; margin-bottom: 4px }
+.steps span { flex: 1; height: 3px; border-radius: 3px; background: var(--line2) } .steps span.on { background: var(--acc) }
+.fl { display: block; font-size: 10.5px; color: var(--mute); margin: 9px 0 4px; font-weight: 500 }
+.in { height: 38px; border-radius: 10px; border: 1px solid var(--line2); background: var(--s2); display: flex; align-items: center; padding: 0 11px; font-size: 12.5px; gap: 8px }
+.in.mono { font-family: var(--f-m); font-size: 11.5px }
+.in.focus { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(91,140,255,.18) }
+.in .ok { margin-left: auto; white-space: nowrap; color: var(--ok); font: 500 10px var(--f-m); display: inline-flex; gap: 5px; align-items: center }
+.in .ok::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 6px var(--ok) }
+.btn { margin-top: 14px; height: 42px; border-radius: 11px; background: var(--acc); color: var(--acc-ink); font: 600 13.5px var(--f-b); display: grid; place-items: center }
+.fine { margin-top: 10px; color: var(--dim); font-size: 10.5px; text-align: center }
+
+/* ---------- laptop sidebar ---------- */
+.lcam { position: relative; overflow: hidden }
+.side { background: linear-gradient(180deg, #0d0f15, #090a0e); border-left: 1px solid var(--line); padding: 14px 13px; display: flex; flex-direction: column; gap: 10px; min-width: 0 }
+.side h5 { margin: 0; font: 500 9.5px var(--f-m); letter-spacing: .14em; color: var(--mute); text-transform: uppercase; display: flex; justify-content: space-between }
+.row { display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 12px; background: var(--s1); border: 1px solid var(--line) }
+.row.on { border-color: rgba(91,140,255,.45); background: linear-gradient(140deg, rgba(91,140,255,.12), var(--s1) 60%) }
+.row b { display: block; font: 700 12.5px/1.15 var(--f-d); letter-spacing: -0.01em }
+.row small { display: block; color: var(--mute); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.row > div { min-width: 0 }
+.row .av { width: 30px; height: 30px; border-radius: 50% }
+.row.u .av { background: #2A2E3A; color: var(--mute) }
+.join { margin-top: auto; padding: 13px; border-radius: 14px; border: 1px solid rgba(91,140,255,.4); background: radial-gradient(90% 80% at 0% 0%, rgba(91,140,255,.22), transparent 70%), var(--s1) }
+.join b { display: block; font: 700 15px/1.15 var(--f-d); letter-spacing: -0.02em }
+.join span { display: block; color: var(--mute); font-size: 10.5px; margin: 3px 0 10px }
+.join .btn { margin: 0; height: 36px; font-size: 12.5px }
+.kbd { font: 500 9.5px var(--f-m); color: var(--dim); text-align: center; margin-top: 7px }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important } }
+@media (max-width: 760px) { .lscr { grid-template-columns: 1fr } .side { display: none } }
+</style>
+</head>
+<body>
+<canvas id="field" aria-hidden="true"></canvas>
+<div class="wrap">
+<div class="eyebrow">Milestone 5 · preview v2</div>
+<h1>Lock on. Know who.</h1>
+<p class="lead">AR heads-up style. A face gets locked on, checked with the laptop, then a glass card slides out beside it with only what matters now: name, current status, LinkedIn.</p>
+
+<template id="logo"><span class="logo"><svg viewBox="0 0 44 26" fill="none"><circle cx="11" cy="15" r="8" stroke="currentColor" stroke-width="3.4"/><circle cx="33" cy="15" r="8" stroke="currentColor" stroke-width="3.4"/><rect x="20" y="2" width="4" height="22" rx="2" fill="#5B8CFF"/></svg><span class="w">aa<i>i</i>na</span></span></template>
+<template id="qr"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><path d="M14 14h2v2m4-2v6h-6v-2"/></svg></span></template>
+<template id="me"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="9" r="3.5"/><path d="M5 20c1.2-3.6 3.8-5.5 7-5.5s5.8 1.9 7 5.5"/></svg></span></template>
+<template id="hud"><div class="grid"></div><div class="lens"><i></i><i></i><i></i><i></i><span class="rd">AAINA · LIVE</span><span class="rd r">ML KIT 64 MS</span></div></template>
+<template id="rc"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="t n"></i><i class="t s"></i><i class="t w"></i><i class="t e"></i></template>
+<template id="p1"><svg width="170" height="330" viewBox="0 0 140 272"><ellipse cx="70" cy="106" rx="38" ry="48" fill="#a98370"/><path d="M32 98c0-34 18-55 40-55s38 19 38 49c-7-16-21-26-38-26S39 77 32 98Z" fill="#1f1815"/><path d="M0 272c4-62 32-102 70-102s66 40 70 102Z" fill="#2f3b52"/></svg></template>
+<template id="p2"><svg width="120" height="250" viewBox="0 0 116 240"><ellipse cx="58" cy="96" rx="30" ry="38" fill="#8e6c5c"/><path d="M28 92c2-28 16-42 32-42s29 16 29 40c-8-10-18-16-30-16S33 80 28 92Z" fill="#2e2521"/><path d="M0 240c4-50 26-82 58-82s54 32 58 82Z" fill="#4a3f36"/></svg></template>
+<template id="card-a"><div class="hd"><span class="av">AK</span><div><h4>Aravind K</h4><span class="op">✓ Opted in</span></div></div>
+  <p class="st">Student · BCA, 3rd year<small>Christ University</small></p>
+  <div class="li"><b>in</b><span>in/aravind-k</span><i>↗</i></div></template>
+
+<div class="devices">
+
+  <!-- 1. Lock-on + checking -->
+  <div>
+    <div class="phone"><div class="scr">
+      <div class="cam"><div class="per" style="left:44px" data-t="p1"></div></div><div class="fade"></div><div class="vign"></div><div data-t="hud"></div>
+      <div class="top"><span data-t="logo"></span><span class="pill"><span class="bars"><i></i><i></i><i></i></span>Live · 1</span></div>
+      <div class="mesh" style="left:89px;top:302px;width:80px;height:98px"></div>
+      <div class="ret lock" style="left:85px;top:296px;width:88px;height:110px" data-t="rc"></div>
+      <svg class="ring" style="left:69px;top:288px" width="120" height="126" viewBox="0 0 120 126"><ellipse class="bg" cx="60" cy="63" rx="58" ry="61"/><ellipse class="fg" cx="60" cy="63" rx="58" ry="61"/></svg>
+      <span class="lbl acc" style="left:129px;top:280px">Identifying</span>
+      <div class="dock"><span data-t="qr"></span><span class="main"><i class="rg"></i>Scanning</span><span data-t="me"></span></div>
+    </div></div>
+    <div class="cap"><b>1 · Lock-on</b><span>Brackets snap onto the face, a dot mesh scans it and a ring spins while the laptop answers (under a second).</span></div>
+  </div>
+
+  <!-- 2. Recognised: card + unknown -->
+  <div>
+    <div class="phone"><div class="scr">
+      <div class="cam"><div class="per" style="left:-16px" data-t="p1"></div><div class="per" style="right:-30px;opacity:.85" data-t="p2"></div></div><div class="fade"></div><div class="vign"></div><div data-t="hud"></div>
+      <div class="top"><span data-t="logo"></span><span class="pill"><span class="bars"><i></i><i></i><i></i></span>Live · 2</span></div>
+      <div class="ret known" style="left:25px;top:296px;width:88px;height:110px" data-t="rc"></div>
+      <svg class="lead-ln" style="left:113px;top:200px" width="30" height="120"><path d="M0 110 L12 110 L22 22 L30 22"/><circle cx="0" cy="110" r="2.5"/></svg>
+      <div class="arc" style="left:96px;top:118px" data-t="card-a"></div>
+      <div class="ret unk" style="left:191px;top:361px;width:62px;height:80px" data-t="rc"></div>
+      <span class="lbl" style="left:205px;top:353px">Not on Aaina</span>
+      <div class="strip"><span class="k">In view</span><span class="chip on"><span class="av">AK</span>Aravind</span><span class="chip u"><span class="av">?</span>Unknown</span></div>
+      <div class="dock"><span data-t="qr"></span><span class="main"><i class="rg"></i>Scanning</span><span data-t="me"></span></div>
+    </div></div>
+    <div class="cap"><b>2 · Recognised</b><span>Blue lock + a glass card linked by a line: name, current status, LinkedIn (tap opens it). Strangers: "Not on Aaina", nothing stored. "In view" strip lists everyone.</span></div>
+  </div>
+
+  <!-- 3. Connect sheet -->
+  <div>
+    <div class="phone"><div class="scr">
+      <div class="cam"><div class="per" style="left:44px" data-t="p1"></div></div><div class="fade"></div>
+      <div class="top"><span data-t="logo"></span></div>
+      <div class="dimmer"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="steps"><span class="on"></span><span class="on"></span></div>
+        <h3>Connect to Aaina</h3>
+        <p>Join the stall laptop's hotspot, then sign in.</p>
+        <span class="fl">Server</span>
+        <div class="in mono">192.168.137.1:8000<span class="ok">online</span></div>
+        <span class="fl">Username</span>
+        <div class="in">aravind</div>
+        <span class="fl">Password</span>
+        <div class="in focus">••••••••••</div>
+        <div class="btn">Sign in</div>
+        <div class="fine">New here? Sign-up comes in Milestone 7</div>
+      </div>
+    </div></div>
+    <div class="cap"><b>3 · Connect</b><span>Server checked live (green = found). Shown when you're not signed in or the laptop can't be reached.</span></div>
+  </div>
+</div>
+
+<h2>Stall laptop</h2>
+<p class="lead">Same app in the laptop's browser, using its webcam. Big-screen view for the stall, plus sign-up for visitors without an Android phone.</p>
+<div class="devices">
+  <div class="laptop">
+    <div class="lid"><div class="lscr">
+      <div class="lcam">
+        <div class="cam"><div class="per" style="left:14%;transform:scale(1.15);transform-origin:bottom" data-t="p1"></div><div class="per" style="right:10%;opacity:.85" data-t="p2"></div></div>
+        <div class="fade"></div><div class="vign"></div><div class="grid"></div>
+        <div class="top" style="top:14px"><span data-t="logo"></span><span class="pill"><span class="bars"><i></i><i></i><i></i></span>Live · 2</span></div>
+        <div class="ret known" style="left:110px;top:192px;width:100px;height:124px" data-t="rc"></div>
+        <svg class="lead-ln" style="left:210px;top:140px" width="40" height="120"><path d="M0 110 L16 110 L28 20 L40 20"/><circle cx="0" cy="110" r="2.5"/></svg>
+        <div class="arc" style="left:250px;top:110px;width:160px" data-t="card-a"></div>
+        <div class="ret unk" style="left:466px;top:265px;width:62px;height:80px" data-t="rc"></div>
+        <span class="lbl" style="left:497px;top:257px">Not on Aaina</span>
+      </div>
+      <div class="side">
+        <h5><span>In view</span><span>2</span></h5>
+        <div class="row on"><span class="av">AK</span><div><b>Aravind K</b><small>Student · Christ University</small></div></div>
+        <div class="row u"><span class="av">?</span><div><b>Unknown</b><small>Not on Aaina · nothing stored</small></div></div>
+        <div class="join">
+          <b>Join Aaina here</b>
+          <span>No Android phone? Sign up on this laptop with its camera in about a minute.</span>
+          <div class="btn">Sign up on this laptop</div>
+        </div>
+        <div class="kbd">Phones: hotspot 192.168.137.1</div>
+      </div>
+    </div></div>
+    <div class="base"></div>
+    <div class="cap" style="max-width:520px"><b>4 · Stall laptop (browser)</b><span>Webcam view with the same lock-on and cards, a side list of who's in view, and a "Sign up on this laptop" button (the sign-up screens themselves come in Milestone 7).</span></div>
+  </div>
+</div>
+</div>
+
+<script>
+// Fill repeated pieces. Elements with class per/ret/arc keep their position and get the part inside.
+document.querySelectorAll("[data-t]").forEach(el => {
+  const part = document.getElementById(el.dataset.t).content.cloneNode(true);
+  el.matches(".per, .ret, .arc") ? el.appendChild(part) : el.replaceWith(part);
+});
+// Subtle animated dot-field behind the page.
+const c = document.getElementById("field"), x = c.getContext("2d");
+let w, h, dots = [];
+function size() { w = c.width = innerWidth * devicePixelRatio; h = c.height = innerHeight * devicePixelRatio;
+  dots = []; const g = 26 * devicePixelRatio; for (let i = g / 2; i < w; i += g) for (let j = g / 2; j < h; j += g) dots.push([i, j, Math.random() * 6.28]); }
+size(); addEventListener("resize", size);
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function draw(t) { x.clearRect(0, 0, w, h);
+  for (const [i, j, p] of dots) { const a = .05 + .07 * (still ? .5 : (Math.sin(t / 1400 + p + i / 400) + 1) / 2);
+    x.fillStyle = `rgba(140,165,255,${a})`; x.fillRect(i, j, 1.4 * devicePixelRatio, 1.4 * devicePixelRatio); }
+  if (!still) requestAnimationFrame(draw); }
+requestAnimationFrame(draw);
+</script>
+</body></html>

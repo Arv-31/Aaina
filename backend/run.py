@@ -28,6 +28,9 @@ def lan_ip():
 
 if __name__ == "__main__":
     print(f"\n  Aaina backend starting...")
-    print(f"  On this laptop : http://localhost:{settings.port}/docs")
-    print(f"  From the phone : http://{lan_ip()}:{settings.port}\n")
+    ip = lan_ip()
+    print(f"  API docs        : http://localhost:{settings.port}/docs")
+    print(f"  Laptop app      : http://localhost:{settings.port}/app/")
+    print(f"  Phone app (APK) : http://{ip}:{settings.port}/get-app")
+    print(f"  Phone server    : http://{ip}:{settings.port}  (type this in the app's Connect sheet)\n")
     uvicorn.run("app.main:app", host=settings.host, port=settings.port)

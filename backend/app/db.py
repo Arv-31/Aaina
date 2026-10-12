@@ -12,14 +12,20 @@ Tables:
   app_state        small key/value settings, e.g. which event is running now
 
 Deleting a user deletes their embeddings, consents and sessions too (ON DELETE CASCADE).
-Milestone 3 can add Supabase behind these same functions; the rest of the app won't change.
+
+Two engines, picked by DB_BACKEND in .env (the rest of the app never knows which one runs):
+  sqlite    a file on this laptop (default; works with no internet at the expo)
+  supabase  Supabase's free cloud Postgres. The SQL below is written once, SQLite-style
+            with "?" placeholders; for Postgres it is translated in _PgConn.
 """
 
 import json
 import os
 import sqlite3
+import threading
 import time
 import uuid
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -95,22 +101,106 @@ def now():
     return int(time.time())
 
 
+def using_postgres():
+    return settings.db_backend == "supabase"
+
+
+# Postgres types for the same tables (SQLite is relaxed about types, Postgres is not).
+# BIGINT because unix times pass the 32-bit limit in 2038.
+PG_SCHEMA = (SCHEMA
+             .replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
+             .replace("INTEGER", "BIGINT")
+             .replace("BLOB", "BYTEA"))
+
+
+class _PgConn:
+    """Makes a Postgres connection accept the same SQL as SQLite ("?" -> "%s")."""
+
+    def __init__(self, conn):
+        self.conn = conn
+
+    def execute(self, sql, params=None):
+        return self.conn.execute(sql.replace("?", "%s"), params or None)
+
+
+_pool = None
+_pool_lock = threading.Lock()
+
+
+def _pg_pool():
+    """A few open connections kept ready, so each request skips the slow internet handshake."""
+    global _pool
+    with _pool_lock:
+        if _pool is None:
+            # Imported here so the default SQLite setup never needs these packages.
+            from psycopg.rows import dict_row
+            from psycopg_pool import ConnectionPool
+
+            if not settings.supabase_db_url:
+                raise RuntimeError("DB_BACKEND=supabase but SUPABASE_DB_URL is empty in .env")
+
+            def use_aaina_schema(conn):
+                conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{settings.db_schema}"')
+                conn.execute(f'SET search_path TO "{settings.db_schema}"')
+                conn.commit()
+
+            _pool = ConnectionPool(
+                settings.supabase_db_url, min_size=1, max_size=4, configure=use_aaina_schema,
+                # dict_row: rows behave like dicts (row["name"]), same as SQLite below.
+                # prepare_threshold=None: also works through Supabase's pooler.
+                kwargs={"row_factory": dict_row, "prepare_threshold": None},
+                open=True, timeout=15,
+            )
+    return _pool
+
+
+@contextmanager
 def connect():
-    """Open the database. Each request gets its own short-lived connection."""
+    """
+    Open the database for one short job:  with connect() as conn: conn.execute(...)
+    Saves (commits) at the end, or undoes everything if an error happened.
+    """
+    if using_postgres():
+        with _pg_pool().connection() as conn:
+            yield _PgConn(conn)
+        return
     os.makedirs(os.path.dirname(settings.db_path), exist_ok=True)
     conn = sqlite3.connect(settings.db_path)
     conn.row_factory = sqlite3.Row             # rows behave like dicts: row["name"]
     conn.execute("PRAGMA foreign_keys = ON")   # needed for ON DELETE CASCADE in SQLite
-    return conn
+    try:
+        with conn:                             # commit, or roll back on error
+            yield conn
+    finally:
+        conn.close()
 
 
 def init_db():
+    """Create any missing tables (safe to run every start-up)."""
     with connect() as conn:
+        if using_postgres():
+            conn.execute(PG_SCHEMA)
+            conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS event TEXT")
+            # Supabase also lets browsers read tables through its REST API. Our tables are in
+            # their own schema, which that API doesn't expose; row-level security with no
+            # rules is a second lock. The backend's own login bypasses it.
+            for table in ["users", "face_embeddings", "consents", "sessions",
+                          "recognitions", "events", "app_state"]:
+                conn.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+            return
         conn.executescript(SCHEMA)
         # Upgrade databases made before event mode existed: add the missing column.
         columns = [row["name"] for row in conn.execute("PRAGMA table_info(users)")]
         if "event" not in columns:
             conn.execute("ALTER TABLE users ADD COLUMN event TEXT")
+
+
+def describe():
+    """One line for the start-up message: which database is in use."""
+    if using_postgres():
+        host = settings.supabase_db_url.split("@")[-1].split("/")[0]   # never print the password
+        return f"Supabase ({host}, schema {settings.db_schema})"
+    return f"SQLite ({settings.db_path})"
 
 
 def _user_dict(row):
@@ -195,8 +285,8 @@ def list_users(search=""):
     with connect() as conn:
         rows = conn.execute(
             "SELECT u.*, (SELECT COUNT(*) FROM face_embeddings e WHERE e.user_id = u.id) AS face_count "
-            "FROM users u WHERE u.name LIKE ? OR u.username LIKE ? ORDER BY u.created_at DESC",
-            (f"%{search}%", f"%{search}%"),
+            "FROM users u WHERE LOWER(u.name) LIKE ? OR LOWER(u.username) LIKE ? ORDER BY u.created_at DESC",
+            (f"%{search.lower()}%", f"%{search.lower()}%"),
         ).fetchall()
     users = []
     for row in rows:
@@ -221,7 +311,7 @@ def replace_embeddings(user_id, embeddings):
 
 def count_embeddings(user_id):
     with connect() as conn:
-        return conn.execute("SELECT COUNT(*) FROM face_embeddings WHERE user_id = ?", (user_id,)).fetchone()[0]
+        return conn.execute("SELECT COUNT(*) AS n FROM face_embeddings WHERE user_id = ?", (user_id,)).fetchone()["n"]
 
 
 def load_visible_embeddings():
@@ -232,7 +322,7 @@ def load_visible_embeddings():
             "JOIN users u ON u.id = e.user_id WHERE u.visible = 1"
         ).fetchall()
     ids = [r["user_id"] for r in rows]
-    matrix = np.array([np.frombuffer(r["embedding"], dtype=np.float32) for r in rows]) if rows else np.zeros((0, 512), np.float32)
+    matrix = np.array([np.frombuffer(bytes(r["embedding"]), dtype=np.float32) for r in rows]) if rows else np.zeros((0, 512), np.float32)
     return ids, matrix
 
 
@@ -274,18 +364,19 @@ def overview():
     t = now()
     start_of_day = t - (t % 86400)
     with connect() as conn:
-        one = lambda sql, *a: conn.execute(sql, a).fetchone()[0]  # noqa: E731
+        # Every count query is written "SELECT COUNT(...) AS n ..." so both engines read row["n"].
+        one = lambda sql, *a: conn.execute(sql, a).fetchone()["n"]  # noqa: E731
         recent = conn.execute(
             "SELECT r.at, u.name FROM recognitions r JOIN users u ON u.id = r.user_id "
             "ORDER BY r.at DESC LIMIT 20"
         ).fetchall()
         return {
-            "users_total": one("SELECT COUNT(*) FROM users"),
-            "users_hidden": one("SELECT COUNT(*) FROM users WHERE visible = 0"),
-            "users_with_face": one("SELECT COUNT(DISTINCT user_id) FROM face_embeddings"),
-            "scans_last_10_min": one("SELECT COUNT(*) FROM recognitions WHERE at >= ?", t - 600),
-            "matches_today": one("SELECT COUNT(*) FROM recognitions WHERE user_id IS NOT NULL AND at >= ?", start_of_day),
-            "unknown_today": one("SELECT COUNT(*) FROM recognitions WHERE user_id IS NULL AND at >= ?", start_of_day),
+            "users_total": one("SELECT COUNT(*) AS n FROM users"),
+            "users_hidden": one("SELECT COUNT(*) AS n FROM users WHERE visible = 0"),
+            "users_with_face": one("SELECT COUNT(DISTINCT user_id) AS n FROM face_embeddings"),
+            "scans_last_10_min": one("SELECT COUNT(*) AS n FROM recognitions WHERE at >= ?", t - 600),
+            "matches_today": one("SELECT COUNT(*) AS n FROM recognitions WHERE user_id IS NOT NULL AND at >= ?", start_of_day),
+            "unknown_today": one("SELECT COUNT(*) AS n FROM recognitions WHERE user_id IS NULL AND at >= ?", start_of_day),
             "recent_matches": [{"name": r["name"], "at": r["at"]} for r in recent],
         }
 

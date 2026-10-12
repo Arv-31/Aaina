@@ -12,3 +12,7 @@ python-multipart==0.0.32    # lets FastAPI receive uploaded photos
 pyotp==2.10.0           # admin one-time codes (works with Google Authenticator)
 qrcode==8.2             # prints the admin setup QR code in the terminal
 httpx==0.28.1           # used by the automatic test script (tools/test_backend.py)
+
+# Milestone 3: optional Supabase (Postgres) database
+psycopg[binary]==3.3.6  # talks to Postgres (only used when DB_BACKEND=supabase)
+psycopg-pool==3.3.3     # keeps a few connections open so requests stay fast
